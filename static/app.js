@@ -641,6 +641,9 @@ async function dslRunAnalysis() {
   if (dslDomain === 'D') {
     // Domaine Énergie : tous les 6
     typesToGenerate = OUTPUT_TYPES.map(o => o.id);
+  } else if (dslDomain === 'A') {
+    // Domaine Qualité : A3 + Alerte KPI + Quick-Fix
+    typesToGenerate = ['digital_a3', 'kpi_alert', 'quick_fix'];
   } else if (isMultiDomain) {
     typesToGenerate = ['digital_a3', 'kpi_alert', 'quick_fix', 'exec_summary', 'cross_domain'];
   } else {
