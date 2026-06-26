@@ -217,13 +217,39 @@ def dsl_analyze():
         include_rag_context=True,
     )
 
-    # Tentative de parse JSON pour retourner directement l'objet structuré
+    # ── Parse JSON robuste (3 stratégies) ────────────────────────────────
     parsed_result = None
+    raw = answer.strip()
+    # Étape 1 : retirer les fences markdown
+    for fence in ("```json", "```"):
+        raw = raw.replace(fence, "")
+    raw = raw.strip()
+    # Étape 2 : extraire uniquement le bloc JSON { ... } (ignore tout préfixe/suffixe texte)
+    start_idx = raw.find('{')
+    end_idx   = raw.rfind('}')
+    if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
+        raw = raw[start_idx:end_idx + 1]
+
+    # Stratégie 1 : parse direct
     try:
-        cleaned = answer.replace("```json", "").replace("```", "").strip()
-        parsed_result = json.loads(cleaned)
+        parsed_result = json.loads(raw)
     except (json.JSONDecodeError, ValueError):
-        pass   # on retourne le texte brut dans raw_answer
+        pass
+
+    # Stratégie 2 : réparation JSON tronqué (fermer les accolades/crochets ouverts)
+    if parsed_result is None:
+        try:
+            rep = raw.rstrip()
+            # Supprimer virgule finale parasite avant fermeture
+            while rep and rep[-1] in (',', ':'):
+                rep = rep[:-1].rstrip()
+            opens = rep.count('{') - rep.count('}')
+            arrs  = rep.count('[') - rep.count(']')
+            rep += ']' * max(arrs, 0) + '}' * max(opens, 0)
+            parsed_result = json.loads(rep)
+            logger.warning("JSON tronqué réparé (%d }, %d ])", opens, arrs)
+        except Exception:
+            pass  # raw_answer reste disponible côté client
 
     history.append({"role": "user",      "content": user_message})
     history.append({"role": "assistant", "content": answer})

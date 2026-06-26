@@ -2,528 +2,24 @@
 <html lang="fr">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>Industrial RAG — Ahmed · DSL Agent</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,700;1,400&display=swap" rel="stylesheet">
-  <style>
-    :root {
-      --bg:        #0b0c0f;
-      --panel:     #13151a;
-      --card:      #1a1d24;
-      --input-bg:  #20232b;
-      --border:    #2a2e38;
-      --accent:    #d97757;
-      --accent2:   #e8956a;
-      --green:     #3fb950;
-      --yellow:    #d4a017;
-      --red:       #e05050;
-      --blue:      #4a9eff;
-      --txt:       #dde3ec;
-      --txt-dim:   #7a8494;
-      --txt-dark:  #3e4450;
-      --radius:    10px;
-      --shadow:    0 4px 24px rgba(0,0,0,.45);
-    }
-
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-    body {
-      font-family: 'DM Sans', sans-serif;
-      background: var(--bg);
-      color: var(--txt);
-      height: 100vh;
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-    }
-
-    /* ── HEADER ── */
-    header {
-      background: var(--panel);
-      border-bottom: 1px solid var(--border);
-      padding: 0 24px;
-      height: 54px;
-      display: flex;
-      align-items: center;
-      gap: 14px;
-      flex-shrink: 0;
-      z-index: 10;
-    }
-    .logo { font-size: 20px; }
-    .logo-text {
-      font-family: 'Space Mono', monospace;
-      font-size: 14px;
-      font-weight: 700;
-      letter-spacing: -.3px;
-    }
-    .badge {
-      background: var(--accent);
-      color: #fff;
-      font-size: 10px;
-      font-weight: 700;
-      padding: 3px 8px;
-      border-radius: 20px;
-      letter-spacing: .5px;
-      text-transform: uppercase;
-    }
-    .badge-dsl {
-      background: #1e3a5f;
-      color: var(--blue);
-      border: 1px solid #2a5a8f;
-      font-size: 10px;
-      font-weight: 700;
-      padding: 3px 8px;
-      border-radius: 20px;
-      letter-spacing: .5px;
-      text-transform: uppercase;
-    }
-    .tagline { color: var(--txt-dim); font-size: 12px; margin-left: 4px; }
-    .spacer { flex: 1; }
-    .env-status {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      background: var(--input-bg);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 0 14px;
-      height: 34px;
-      font-size: 12px;
-      color: var(--txt-dim);
-    }
-    .env-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); flex-shrink: 0; }
-    .env-dot.warn { background: var(--yellow); }
-
-    /* ── LAYOUT ── */
-    .layout { display: flex; flex: 1; overflow: hidden; }
-
-    /* ── SIDEBAR ── */
-    .sidebar {
-      width: 210px;
-      flex-shrink: 0;
-      background: var(--panel);
-      border-right: 1px solid var(--border);
-      display: flex;
-      flex-direction: column;
-      padding: 14px 12px;
-      gap: 4px;
-      overflow-y: auto;
-    }
-    .nav-item {
-      display: flex; align-items: center; gap: 10px;
-      padding: 9px 11px; border-radius: var(--radius);
-      cursor: pointer; font-size: 13px; font-weight: 500;
-      color: var(--txt-dim); transition: background .15s, color .15s;
-      border: none; background: none; width: 100%; text-align: left;
-    }
-    .nav-item:hover { background: var(--card); color: var(--txt); }
-    .nav-item.active { background: var(--card); color: var(--accent); }
-    .nav-icon { font-size: 15px; }
-    .nav-sep { height: 1px; background: var(--border); margin: 8px 0; }
-    .sidebar-label {
-      font-size: 10px; font-weight: 700; text-transform: uppercase;
-      letter-spacing: 1px; color: var(--txt-dark); margin: 10px 0 6px 4px;
-    }
-    .ctx-badge {
-      background: var(--card); border: 1px solid var(--border);
-      border-radius: var(--radius); padding: 9px 11px;
-      font-size: 11px; color: var(--txt-dim); line-height: 1.6;
-    }
-    .ctx-badge.ok { border-color: #2a4a2a; color: var(--green); }
-    .ctx-badge.warn { border-color: #4a3a10; color: var(--yellow); }
-    .method-tags { display: flex; flex-wrap: wrap; gap: 4px; padding: 0 2px; }
-    .method-tag {
-      background: var(--card); border: 1px solid var(--border);
-      border-radius: 4px; font-size: 10px; padding: 2px 6px;
-      color: var(--txt-dim); font-family: 'Space Mono', monospace;
-    }
-
-    /* ── MAIN ── */
-    .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
-    .tab-content { display: none; flex: 1; overflow: hidden; flex-direction: column; }
-    .tab-content.visible { display: flex; }
-
-    /* ── CHAT TAB ── */
-    .chat-area {
-      flex: 1; overflow-y: auto;
-      padding: 22px 26px;
-      display: flex; flex-direction: column;
-      gap: 18px; scroll-behavior: smooth;
-    }
-    .welcome-card {
-      background: var(--card); border: 1px solid var(--border);
-      border-radius: 14px; padding: 22px 24px;
-      max-width: 680px; align-self: center; text-align: center;
-    }
-    .welcome-card h2 {
-      font-family: 'Space Mono', monospace;
-      font-size: 16px; color: var(--accent); margin-bottom: 6px;
-    }
-    .welcome-card p { font-size: 13px; color: var(--txt-dim); line-height: 1.7; }
-    .example-qs { display: flex; flex-wrap: wrap; gap: 7px; justify-content: center; margin-top: 14px; }
-    .example-q {
-      background: var(--input-bg); border: 1px solid var(--border);
-      border-radius: 20px; padding: 6px 14px; font-size: 12px;
-      color: var(--txt-dim); cursor: pointer; transition: border-color .15s, color .15s;
-    }
-    .example-q:hover { border-color: var(--accent); color: var(--accent); }
-
-    .msg { display: flex; flex-direction: column; gap: 4px; max-width: 820px; }
-    .msg.user { align-self: flex-end; align-items: flex-end; }
-    .msg.bot  { align-self: flex-start; align-items: flex-start; }
-    .msg-label {
-      font-size: 11px; font-weight: 700;
-      letter-spacing: .5px; text-transform: uppercase;
-    }
-    .msg.user .msg-label { color: var(--accent); }
-    .msg.bot  .msg-label { color: var(--green); }
-    .msg-bubble {
-      padding: 13px 17px; border-radius: 14px;
-      font-size: 14px; line-height: 1.7;
-      white-space: pre-wrap; word-break: break-word;
-    }
-    .msg.user .msg-bubble {
-      background: var(--accent); color: #fff;
-      border-bottom-right-radius: 4px;
-    }
-    .msg.bot .msg-bubble {
-      background: var(--card); border: 1px solid var(--border);
-      border-bottom-left-radius: 4px; color: var(--txt);
-    }
-    .loading-bubble {
-      background: var(--card); border: 1px solid var(--border);
-      border-radius: 14px; border-bottom-left-radius: 4px;
-      padding: 14px 18px; display: flex; align-items: center;
-      gap: 10px; font-size: 13px; color: var(--yellow); font-style: italic;
-    }
-    .dots { display: flex; gap: 4px; }
-    .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--yellow); animation: blink 1.2s infinite; }
-    .dot:nth-child(2) { animation-delay: .2s; }
-    .dot:nth-child(3) { animation-delay: .4s; }
-    @keyframes blink { 0%,80%,100%{opacity:.2} 40%{opacity:1} }
-
-    .input-bar {
-      background: var(--panel); border-top: 1px solid var(--border);
-      padding: 12px 22px; display: flex; gap: 10px; align-items: flex-end;
-    }
-    .input-wrap {
-      flex: 1; background: var(--input-bg); border: 1px solid var(--border);
-      border-radius: var(--radius); padding: 10px 14px; transition: border-color .15s;
-    }
-    .input-wrap:focus-within { border-color: var(--accent); }
-    .input-wrap textarea {
-      width: 100%; background: none; border: none; outline: none;
-      color: var(--txt); font-family: 'DM Sans', sans-serif;
-      font-size: 14px; resize: none; min-height: 42px; max-height: 140px; line-height: 1.5;
-    }
-    .input-wrap textarea::placeholder { color: var(--txt-dark); }
-    .btn-send, .btn-clear {
-      border: none; cursor: pointer; border-radius: var(--radius);
-      font-family: 'DM Sans', sans-serif; font-weight: 600; font-size: 13px;
-      transition: opacity .15s, transform .1s; white-space: nowrap;
-    }
-    .btn-send { background: var(--accent); color: #fff; padding: 11px 20px; height: 44px; }
-    .btn-send:hover { opacity: .88; }
-    .btn-send:active { transform: scale(.97); }
-    .btn-send:disabled { opacity: .4; cursor: not-allowed; }
-    .btn-clear { background: var(--input-bg); border: 1px solid var(--border); color: var(--txt-dim); padding: 11px 14px; height: 44px; }
-    .btn-clear:hover { color: var(--red); border-color: var(--red); }
-
-    /* ── DOCS TAB ── */
-    .docs-area {
-      flex: 1; overflow-y: auto; padding: 22px 26px;
-      display: flex; flex-direction: column; gap: 14px;
-    }
-    .docs-header h2 { font-size: 16px; font-weight: 700; margin-bottom: 4px; }
-    .docs-header p { font-size: 13px; color: var(--txt-dim); }
-    .docs-actions { display: flex; gap: 10px; flex-wrap: wrap; }
-    .btn-action {
-      display: flex; align-items: center; gap: 7px;
-      border: none; border-radius: var(--radius); cursor: pointer;
-      font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 600;
-      padding: 8px 16px; transition: opacity .15s, transform .1s;
-    }
-    .btn-action:active { transform: scale(.97); }
-    .btn-primary { background: var(--accent); color: #fff; }
-    .btn-secondary { background: var(--input-bg); color: var(--txt); border: 1px solid var(--border); }
-    .btn-secondary:hover { border-color: var(--accent); color: var(--accent); }
-    .docs-status { font-size: 13px; padding: 4px 0; min-height: 22px; transition: color .2s; }
-    .drop-zone {
-      border: 2px dashed var(--border); border-radius: 14px; padding: 30px;
-      text-align: center; cursor: pointer; transition: border-color .2s, background .2s;
-      color: var(--txt-dim); font-size: 13px;
-    }
-    .drop-zone:hover, .drop-zone.dragging {
-      border-color: var(--accent); background: rgba(217,119,87,.06); color: var(--accent);
-    }
-    .drop-zone .dz-icon { font-size: 30px; display: block; margin-bottom: 8px; }
-    .formats-hint { font-size: 11px; color: var(--txt-dark); margin-top: 6px; }
-    .docs-table {
-      background: var(--card); border: 1px solid var(--border);
-      border-radius: 12px; overflow: hidden;
-    }
-    .docs-table table { width: 100%; border-collapse: collapse; font-size: 13px; }
-    .docs-table th {
-      background: var(--panel); padding: 11px 16px; text-align: left;
-      font-size: 11px; font-weight: 700; text-transform: uppercase;
-      letter-spacing: .5px; color: var(--txt-dim); border-bottom: 1px solid var(--border);
-    }
-    .docs-table td { padding: 12px 16px; border-bottom: 1px solid var(--border); color: var(--txt); }
-    .docs-table tr:last-child td { border-bottom: none; }
-    .docs-table tr:hover td { background: rgba(255,255,255,.02); }
-    .doc-ext {
-      display: inline-block; background: var(--input-bg); border: 1px solid var(--border);
-      border-radius: 4px; padding: 2px 7px; font-size: 11px;
-      font-family: 'Space Mono', monospace; color: var(--txt-dim);
-    }
-    .status-ok {
-      display: inline-flex; align-items: center; gap: 5px;
-      background: rgba(63,185,80,.12); border: 1px solid rgba(63,185,80,.25);
-      color: var(--green); border-radius: 20px; padding: 3px 10px;
-      font-size: 11px; font-weight: 600;
-    }
-    .btn-del-row {
-      background: none; border: none; cursor: pointer;
-      color: var(--txt-dark); font-size: 15px; padding: 4px 8px;
-      border-radius: 6px; transition: color .15s, background .15s;
-    }
-    .btn-del-row:hover { color: var(--red); background: #2a1010; }
-    .no-docs { text-align: center; color: var(--txt-dim); font-size: 13px; padding: 28px; }
-
-    /* ── DSL AGENT TAB ── */
-    .dsl-area { flex: 1; overflow-y: auto; }
-
-    /* DSL Home */
-    .dsl-home {
-      padding: 28px 26px; display: flex; flex-direction: column;
-      align-items: center; gap: 0;
-    }
-    .dsl-hero {
-      text-align: center; max-width: 620px; margin-bottom: 28px;
-    }
-    .dsl-hero .hero-icon { font-size: 40px; margin-bottom: 10px; }
-    .dsl-hero h2 {
-      font-family: 'Space Mono', monospace;
-      font-size: 20px; font-weight: 700; color: var(--blue);
-      margin-bottom: 4px;
-    }
-    .dsl-hero .hero-sub { font-size: 13px; color: var(--txt-dim); margin-bottom: 2px; }
-    .dsl-hero .hero-meta { font-size: 11px; color: var(--txt-dark); }
-    .domain-grid {
-      display: grid; grid-template-columns: repeat(4, 1fr);
-      gap: 8px; max-width: 680px; width: 100%; margin-bottom: 20px;
-    }
-    .domain-tile {
-      background: var(--card); border: 1px solid var(--border);
-      border-radius: 10px; padding: 12px 8px; text-align: center;
-      position: relative; cursor: pointer;
-      transition: border-color .15s, background .15s;
-    }
-    .domain-tile:hover { border-color: var(--accent); background: rgba(217,119,87,.06); }
-    .domain-tile .d-icon { font-size: 20px; margin-bottom: 4px; }
-    .domain-tile .d-id { font-size: 11px; font-weight: 700; color: var(--txt); }
-    .domain-tile .d-lbl { font-size: 10px; color: var(--txt-dim); margin-top: 2px; line-height: 1.3; }
-    .new-badge {
-      position: absolute; top: 5px; right: 5px;
-      background: var(--blue); color: #fff;
-      font-size: 8px; font-weight: 700; border-radius: 3px; padding: 1px 4px;
-    }
-    .dsl-features {
-      display: grid; grid-template-columns: repeat(2, 1fr);
-      gap: 8px; max-width: 480px; width: 100%; margin-bottom: 22px;
-    }
-    .feat {
-      background: var(--card); border: 1px solid var(--border);
-      border-radius: 8px; padding: 10px 12px;
-    }
-    .feat .fi { font-size: 16px; margin-bottom: 4px; }
-    .feat .ft { font-size: 12px; font-weight: 500; }
-    .feat .fd { font-size: 11px; color: var(--txt-dim); margin-top: 2px; }
-    .btn-start {
-      background: var(--blue); color: #fff; border: none;
-      border-radius: 10px; padding: 12px 36px;
-      font-family: 'DM Sans', sans-serif;
-      font-size: 15px; font-weight: 700; cursor: pointer; transition: opacity .15s;
-    }
-    .btn-start:hover { opacity: .88; }
-
-    /* DSL Select */
-    .dsl-select, .dsl-form-page, .dsl-result-page { display: none; padding: 22px 26px; }
-    .dsl-select.active, .dsl-form-page.active, .dsl-result-page.active { display: block; }
-    .dsl-home.hidden { display: none; }
-
-    .back-link {
-      background: none; border: none; color: var(--txt-dim); font-size: 13px;
-      cursor: pointer; display: flex; align-items: center; gap: 6px; margin-bottom: 16px;
-      padding: 0; font-family: 'DM Sans', sans-serif;
-    }
-    .back-link:hover { color: var(--txt); }
-    .section-title { font-size: 18px; font-weight: 700; margin-bottom: 4px; }
-    .section-sub { font-size: 13px; color: var(--txt-dim); margin-bottom: 18px; }
-    .domain-cards {
-      display: grid; grid-template-columns: repeat(4, 1fr);
-      gap: 9px; margin-bottom: 18px;
-    }
-    .dcard {
-      border: 2px solid var(--border); border-radius: 10px;
-      padding: 12px; cursor: pointer; position: relative;
-      transition: all .15s; background: var(--card);
-    }
-    .dcard:hover { border-color: var(--txt-dim); }
-    .dcard.selected { border-color: var(--blue); background: rgba(74,158,255,.08); }
-    .dcard .di { font-size: 18px; margin-bottom: 4px; }
-    .dcard .did { font-size: 12px; font-weight: 700; color: var(--txt); }
-    .dcard .dlbl { font-size: 10px; color: var(--txt-dim); line-height: 1.3; margin-top: 2px; }
-    .btn-continue {
-      background: var(--input-bg); color: var(--txt-dim); border: 1px solid var(--border);
-      border-radius: 8px; padding: 10px 26px;
-      font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: 600; cursor: pointer;
-      transition: all .15s; opacity: .5; pointer-events: none;
-    }
-    .btn-continue.ready { opacity: 1; pointer-events: auto; background: var(--blue); color: #fff; border-color: var(--blue); }
-    .btn-continue.ready:hover { opacity: .88; }
-
-    /* Form */
-    .domain-header {
-      background: var(--card); border: 1px solid var(--border);
-      border-radius: 10px; padding: 13px 16px; margin-bottom: 18px;
-    }
-    .domain-header .dh-top { display: flex; align-items: center; gap: 10px; margin-bottom: 3px; }
-    .domain-header .dh-icon { font-size: 22px; }
-    .domain-header .dh-name { font-size: 15px; font-weight: 700; }
-    .domain-header .dh-desc { font-size: 12px; color: var(--txt-dim); }
-    .field-group { margin-bottom: 13px; }
-    .field-label { font-size: 12px; font-weight: 500; color: var(--txt-dim); margin-bottom: 5px; display: block; }
-    .field-input, .field-select {
-      width: 100%; padding: 9px 13px; border: 1px solid var(--border);
-      border-radius: 8px; font-size: 13px; background: var(--input-bg);
-      color: var(--txt); font-family: 'DM Sans', sans-serif;
-      transition: border-color .15s;
-    }
-    .field-input:focus, .field-select:focus { outline: none; border-color: var(--blue); }
-    .field-select { appearance: none; }
-    .conf-row {
-      background: var(--card); border-radius: 8px; padding: 10px 13px;
-      margin-bottom: 14px; display: flex; align-items: center; gap: 10px;
-      border: 1px solid var(--border);
-    }
-    .conf-dot { width: 10px; height: 10px; border-radius: 50%; }
-    .conf-text { font-size: 12px; font-weight: 600; }
-    .btn-analyze {
-      width: 100%; background: var(--blue); color: #fff; border: none;
-      border-radius: 8px; padding: 12px; font-size: 14px; font-weight: 700;
-      cursor: pointer; font-family: 'DM Sans', sans-serif; transition: opacity .15s;
-    }
-    .btn-analyze:hover { opacity: .88; }
-    .btn-analyze:disabled { opacity: .4; cursor: not-allowed; }
-    .form-error {
-      background: rgba(224,80,80,.1); border: 1px solid rgba(224,80,80,.3);
-      color: var(--red); border-radius: 8px; padding: 10px 13px;
-      font-size: 12px; margin-bottom: 12px; display: none;
-    }
-
-    /* DSL Loading */
-    .dsl-loading {
-      display: none; flex-direction: column; align-items: center; justify-content: center;
-      padding: 60px; gap: 16px;
-    }
-    .dsl-loading.active { display: flex; }
-    .spin {
-      width: 36px; height: 36px;
-      border: 3px solid var(--border); border-top-color: var(--blue);
-      border-radius: 50%; animation: spin .8s linear infinite;
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
-    .spin-text { font-size: 14px; color: var(--txt-dim); }
-
-    /* Result page */
-    .dsl-result-page { padding: 0 !important; }
-    .result-layout { display: flex; height: 100%; }
-    .result-left { flex: 1; overflow-y: auto; padding: 22px 26px; }
-    .result-right {
-      width: 320px; flex-shrink: 0; border-left: 1px solid var(--border);
-      display: flex; flex-direction: column; background: var(--panel);
-    }
-    .result-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; flex-wrap: wrap; gap: 8px; }
-    .result-header h3 { font-size: 16px; font-weight: 700; }
-    .result-actions { display: flex; gap: 7px; }
-    .icon-btn {
-      background: var(--input-bg); border: 1px solid var(--border);
-      border-radius: 6px; padding: 5px 10px; font-size: 12px;
-      cursor: pointer; color: var(--txt-dim); transition: all .15s;
-      font-family: 'DM Sans', sans-serif;
-    }
-    .icon-btn:hover { color: var(--txt); border-color: var(--txt-dim); }
-    .conf-badge {
-      display: inline-flex; align-items: center; gap: 7px;
-      border-radius: 6px; padding: 4px 13px;
-      font-size: 12px; font-weight: 600; margin-bottom: 14px;
-    }
-    .a3-content {
-      background: var(--card); border-radius: 8px; padding: 16px;
-      font-size: 13px; line-height: 1.7; white-space: pre-wrap;
-      border: 1px solid var(--border); color: var(--txt);
-    }
-
-    /* RAG Chat panel */
-    .chat-panel-header {
-      padding: 12px 14px; border-bottom: 1px solid var(--border);
-      display: flex; align-items: center; justify-content: space-between;
-      flex-shrink: 0;
-    }
-    .chat-panel-header span { font-size: 13px; font-weight: 600; }
-    .rag-badge {
-      background: rgba(74,158,255,.15); color: var(--blue);
-      border: 1px solid rgba(74,158,255,.3);
-      font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 4px;
-    }
-    .rag-info {
-      font-size: 10px; color: var(--txt-dark); padding: 5px 14px;
-      border-bottom: 1px solid var(--border); flex-shrink: 0;
-    }
-    .panel-msgs { flex: 1; overflow-y: auto; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
-    .pmsg { max-width: 92%; padding: 8px 11px; border-radius: 8px; font-size: 12px; line-height: 1.5; word-wrap: break-word; white-space: pre-wrap; }
-    .pmsg.user { background: var(--accent); color: #fff; align-self: flex-end; border-radius: 8px 8px 2px 8px; }
-    .pmsg.bot { background: var(--card); color: var(--txt); align-self: flex-start; border: 1px solid var(--border); border-radius: 8px 8px 8px 2px; }
-    .pmsg.thinking { color: var(--yellow); font-style: italic; opacity: .7; align-self: flex-start; background: var(--card); border: 1px solid var(--border); border-radius: 8px; }
-    .panel-input { padding: 9px 10px; border-top: 1px solid var(--border); display: flex; gap: 6px; flex-shrink: 0; }
-    .panel-input textarea {
-      flex: 1; resize: none; height: 54px; padding: 7px 10px;
-      border: 1px solid var(--border); border-radius: 8px;
-      font-size: 12px; font-family: 'DM Sans', sans-serif;
-      background: var(--input-bg); color: var(--txt);
-    }
-    .panel-input textarea:focus { outline: none; border-color: var(--blue); }
-    .panel-send {
-      background: var(--blue); color: #fff; border: none;
-      border-radius: 8px; padding: 6px 12px; font-size: 12px;
-      cursor: pointer; align-self: flex-end; font-weight: 600;
-      transition: opacity .15s;
-    }
-    .panel-send:hover { opacity: .88; }
-    .panel-send:disabled { opacity: .4; cursor: not-allowed; }
-
-    /* ── SCROLLBAR ── */
-    ::-webkit-scrollbar { width: 5px; }
-    ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
-    ::-webkit-scrollbar-thumb:hover { background: var(--txt-dark); }
-
-    #file-input { display: none; }
-
-    @media (max-width: 700px) {
-      .sidebar { display: none; }
-      .tagline { display: none; }
-      .domain-cards, .domain-grid { grid-template-columns: repeat(2, 1fr); }
-      .result-right { display: none; }
-    }
-  </style>
+  <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
 
-<!-- HEADER -->
+<!-- ════════════════════════════════════════
+     SIDEBAR OVERLAY (mobile drawer)
+════════════════════════════════════════ -->
+<div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+<!-- ════════════════════════════════════════
+     HEADER
+════════════════════════════════════════ -->
 <header>
+  <button class="hamburger" onclick="toggleSidebar()" aria-label="Menu">☰</button>
   <span class="logo">🏭</span>
   <span class="logo-text">Industrial RAG</span>
   <span class="badge">✦ Ahmed</span>
@@ -531,16 +27,18 @@
   <span class="tagline">Lean · Six Sigma · TPM · ISO 9001 · DMAIC</span>
   <div class="spacer"></div>
   <div class="env-status">
-    <div class="env-dot" id="env-dot"></div>
+    <div class="env-dot warn" id="env-dot"></div>
     <span id="env-label">Clé API : chargement…</span>
   </div>
 </header>
 
-<!-- LAYOUT -->
+<!-- ════════════════════════════════════════
+     LAYOUT
+════════════════════════════════════════ -->
 <div class="layout">
 
-  <!-- SIDEBAR -->
-  <nav class="sidebar">
+  <!-- ══ SIDEBAR ══ -->
+  <nav class="sidebar" id="sidebar">
     <button class="nav-item active" data-tab="chat" onclick="switchTab('chat')">
       <span class="nav-icon">💬</span> Chat RAG
     </button>
@@ -574,10 +72,12 @@
     </div>
   </nav>
 
-  <!-- MAIN -->
+  <!-- ══ MAIN ══ -->
   <main class="main">
 
-    <!-- ══ CHAT TAB ══ -->
+    <!-- ═══════════════════════════════
+         TAB — CHAT RAG (Ahmed)
+    ═══════════════════════════════ -->
     <div id="tab-chat" class="tab-content visible">
       <div class="chat-area" id="chat-area">
         <div class="welcome-card">
@@ -603,7 +103,9 @@
       </div>
     </div>
 
-    <!-- ══ DSL AGENT TAB ══ -->
+    <!-- ═══════════════════════════════
+         TAB — DSL AGENT
+    ═══════════════════════════════ -->
     <div id="tab-dsl" class="tab-content">
       <div class="dsl-area" id="dsl-area">
 
@@ -617,15 +119,31 @@
           </div>
           <div class="domain-grid" id="home-domain-grid"></div>
           <div class="dsl-features">
-            <div class="feat"><div class="fi">🧠</div><div class="ft">Rapport A3 DMAIC</div><div class="fd">Généré par Claude Sonnet</div></div>
-            <div class="feat"><div class="fi">📄</div><div class="ft">Chat enrichi RAG</div><div class="fd">Vos documents en contexte</div></div>
-            <div class="feat"><div class="fi">📊</div><div class="ft">Confidence Score</div><div class="fd">Fiabilité de l'analyse</div></div>
-            <div class="feat"><div class="fi">🔒</div><div class="ft">Clé via .env</div><div class="fd">Aucune saisie manuelle</div></div>
+            <div class="feat">
+              <div class="fi">🧠</div>
+              <div class="ft">Rapport A3 DMAIC</div>
+              <div class="fd">Généré par Claude Sonnet</div>
+            </div>
+            <div class="feat">
+              <div class="fi">📄</div>
+              <div class="ft">Chat enrichi RAG</div>
+              <div class="fd">Vos documents en contexte</div>
+            </div>
+            <div class="feat">
+              <div class="fi">📊</div>
+              <div class="ft">Confidence Score</div>
+              <div class="fd">Fiabilité de l'analyse</div>
+            </div>
+            <div class="feat">
+              <div class="fi">🔒</div>
+              <div class="ft">Clé via .env</div>
+              <div class="fd">Aucune saisie manuelle</div>
+            </div>
           </div>
           <button class="btn-start" onclick="dslGoSelect()">Démarrer une analyse →</button>
         </div>
 
-        <!-- SELECT -->
+        <!-- SELECT DOMAIN -->
         <div class="dsl-select" id="dsl-select">
           <button class="back-link" onclick="dslBack('home')">← Retour</button>
           <div class="section-title">Choisir le domaine</div>
@@ -644,7 +162,9 @@
             <span id="conf-text" class="conf-text"></span>
           </div>
           <div id="form-error" class="form-error"></div>
-          <button class="btn-analyze" id="btn-analyze" onclick="dslRunAnalysis()">🔍 Analyser avec DMAIC</button>
+          <button class="btn-analyze" id="btn-analyze" onclick="dslRunAnalysis()">
+            🔍 Analyser avec DMAIC
+          </button>
         </div>
 
         <!-- LOADING -->
@@ -656,18 +176,20 @@
         <!-- RESULT -->
         <div class="dsl-result-page" id="dsl-result">
           <div class="result-layout">
+            <!-- Left: rapport A3 -->
             <div class="result-left">
               <div class="result-header">
                 <h3 id="result-title">Rapport Digital A3</h3>
                 <div class="result-actions">
                   <button class="icon-btn" onclick="copyA3()">📋 Copier</button>
                   <button class="icon-btn" onclick="dslBack('form')">✏️ Modifier</button>
-                  <button class="icon-btn" onclick="dslBack('home')">+ Nouvelle analyse</button>
+                  <button class="icon-btn" onclick="dslBack('home')">+ Nouveau</button>
                 </div>
               </div>
               <div id="result-conf"></div>
               <div id="a3-content" class="a3-content"></div>
             </div>
+            <!-- Right: chat RAG -->
             <div class="result-right">
               <div class="chat-panel-header">
                 <span>💬 Chat RAG</span>
@@ -676,17 +198,21 @@
               <div class="rag-info" id="rag-info">Chargement des documents…</div>
               <div class="panel-msgs" id="panel-msgs"></div>
               <div class="panel-input">
-                <textarea id="panel-input" placeholder="Question sur l'analyse ou vos documents…" onkeydown="panelKeydown(event)"></textarea>
+                <textarea id="panel-input"
+                          placeholder="Question sur l'analyse ou vos documents…"
+                          onkeydown="panelKeydown(event)"></textarea>
                 <button class="panel-send" id="panel-send" onclick="sendPanel()">→</button>
               </div>
             </div>
           </div>
         </div>
 
-      </div>
-    </div>
+      </div><!-- /dsl-area -->
+    </div><!-- /tab-dsl -->
 
-    <!-- ══ DOCS TAB ══ -->
+    <!-- ═══════════════════════════════
+         TAB — DOCUMENTS
+    ═══════════════════════════════ -->
     <div id="tab-docs" class="tab-content">
       <div class="docs-area">
         <div class="docs-header">
@@ -694,7 +220,8 @@
           <p>Fichiers industriels indexés et utilisés par Ahmed + DSL Agent en contexte RAG.</p>
         </div>
         <div class="docs-actions">
-          <button class="btn-action btn-primary" onclick="document.getElementById('file-input').click()">
+          <button class="btn-action btn-primary"
+                  onclick="document.getElementById('file-input').click()">
             ➕ Ajouter fichiers
           </button>
           <button class="btn-action btn-secondary" onclick="scanDocuments()">
@@ -707,7 +234,9 @@
         <div id="docs-status" class="docs-status"></div>
         <div class="drop-zone" id="drop-zone"
              onclick="document.getElementById('file-input').click()"
-             ondragover="dragOver(event)" ondragleave="dragLeave(event)" ondrop="dropFiles(event)">
+             ondragover="dragOver(event)"
+             ondragleave="dragLeave(event)"
+             ondrop="dropFiles(event)">
           <span class="dz-icon">📁</span>
           Glissez vos fichiers ici ou cliquez pour sélectionner
           <div class="formats-hint">Formats acceptés : PDF · DOCX · DOC · TXT · MD · CSV</div>
@@ -729,643 +258,31 @@
           </table>
         </div>
       </div>
-    </div>
+    </div><!-- /tab-docs -->
 
   </main>
-</div>
+</div><!-- /layout -->
 
-<script>
-  // ════════════════════════════════════════════
-  // ÉTAT GLOBAL
-  // ════════════════════════════════════════════
-  const SESSION_ID = 'sess_' + Math.random().toString(36).slice(2);
-  let isLoading = false;
+<!-- ════════════════════════════════════════
+     BOTTOM NAV (mobile uniquement)
+════════════════════════════════════════ -->
+<nav class="bottom-nav" id="bottom-nav">
+  <div class="bottom-nav-inner">
+    <button class="bnav-item active" data-tab="chat" onclick="switchTab('chat')">
+      <span class="bnav-icon">💬</span>
+      Chat
+    </button>
+    <button class="bnav-item" data-tab="dsl" onclick="switchTab('dsl')">
+      <span class="bnav-icon">⚙️</span>
+      DSL
+    </button>
+    <button class="bnav-item" data-tab="docs" onclick="switchTab('docs')">
+      <span class="bnav-icon">📂</span>
+      Docs
+    </button>
+  </div>
+</nav>
 
-  // DSL Agent state
-  let dslDomain = null;
-  let dslFormData = {};
-  let dslA3 = '';
-  let dslPanelHistory = [];
-  let dslPanelLoading = false;
-
-  // ════════════════════════════════════════════
-  // DOMAINES DSL
-  // ════════════════════════════════════════════
-  const DOMAINS = {
-    A:{id:"A",label:"Quality & Defects",icon:"🔴",desc:"Taux de défauts, non-conformités, rebuts, retouches",
-      fields:[
-        {key:"machine",label:"Machine / Line ID",type:"text",ph:"ex. PL-03"},
-        {key:"total_units",label:"Total unités produites",type:"number",ph:"ex. 241"},
-        {key:"defective_units",label:"Unités défectueuses",type:"number",ph:"ex. 28"},
-        {key:"defect_type",label:"Type de défaut",type:"text",ph:"ex. Rayures surface"},
-        {key:"shift",label:"Équipe",type:"select",opts:["Matin","Après-midi","Nuit"]},
-        {key:"usl",label:"Limite supérieure USL",type:"number",ph:"ex. 25.5 mm"},
-        {key:"lsl",label:"Limite inférieure LSL",type:"number",ph:"ex. 24.5 mm"},
-      ]},
-    B:{id:"B",label:"Maintenance & OEE",icon:"🟠",desc:"Pannes, disponibilité, MTTR, TRS",
-      fields:[
-        {key:"machine",label:"ID Machine",type:"text",ph:"ex. Moteur M-07"},
-        {key:"planned_time",label:"Temps planifié (h)",type:"number",ph:"ex. 8"},
-        {key:"downtime",label:"Temps d'arrêt total (h)",type:"number",ph:"ex. 2.3"},
-        {key:"downtime_reason",label:"Cause principale",type:"text",ph:"ex. Défaillance roulement"},
-        {key:"actual_output",label:"Production réelle (u)",type:"number",ph:"ex. 180"},
-        {key:"theoretical_output",label:"Production théorique (u)",type:"number",ph:"ex. 240"},
-        {key:"defective_units",label:"Unités défectueuses",type:"number",ph:"ex. 21"},
-      ]},
-    C:{id:"C",label:"Flow & Lead Time",icon:"🟡",desc:"Délais, WIP, goulots, livraisons tardives",
-      fields:[
-        {key:"product",label:"Produit / Processus",type:"text",ph:"ex. Ligne assemblage 2"},
-        {key:"customer_demand",label:"Demande client (u/jour)",type:"number",ph:"ex. 150"},
-        {key:"available_time",label:"Temps dispo (min/jour)",type:"number",ph:"ex. 480"},
-        {key:"current_lead_time",label:"Lead time actuel (h)",type:"number",ph:"ex. 18.4"},
-        {key:"wip",label:"WIP actuel (u en file)",type:"number",ph:"ex. 340"},
-        {key:"otd",label:"Taux livraison à temps (%)",type:"number",ph:"ex. 67"},
-        {key:"bottleneck",label:"Goulot identifié",type:"text",ph:"ex. Poste peinture"},
-      ]},
-    D:{id:"D",label:"Energy & Environment",icon:"🟢",desc:"Surconsommation, CO₂, ISO 14001/50001",isNew:true,
-      fields:[
-        {key:"site",label:"Site / Département",type:"text",ph:"ex. Atelier usinage"},
-        {key:"energy_consumed",label:"Énergie consommée (kWh/mois)",type:"number",ph:"ex. 12500"},
-        {key:"production_volume",label:"Volume production (u/mois)",type:"number",ph:"ex. 4200"},
-        {key:"target_intensity",label:"Intensité cible (kWh/u)",type:"number",ph:"ex. 2.0"},
-        {key:"idle_time_pct",label:"Temps machine idle (%)",type:"number",ph:"ex. 22"},
-        {key:"co2_factor",label:"Facteur CO₂ (kg/kWh)",type:"number",ph:"ex. 0.25"},
-        {key:"energy_source",label:"Source énergie",type:"select",opts:["Réseau électrique","Gaz naturel","Mixte","Renouvelable","Autre"]},
-      ]},
-    E:{id:"E",label:"Supply Chain",icon:"🔵",desc:"Ruptures stock, délais fournisseurs, bullwhip",isNew:true,
-      fields:[
-        {key:"supplier",label:"Fournisseur / Catégorie",type:"text",ph:"ex. MP — Fournisseur X"},
-        {key:"ordered_qty",label:"Quantité commandée (u)",type:"number",ph:"ex. 500"},
-        {key:"delivered_qty",label:"Quantité livrée (u)",type:"number",ph:"ex. 420"},
-        {key:"promised_lead_time",label:"Lead time promis (j)",type:"number",ph:"ex. 7"},
-        {key:"actual_lead_time",label:"Lead time réel (j)",type:"number",ph:"ex. 14"},
-        {key:"stockout_events",label:"Ruptures (mois dernier)",type:"number",ph:"ex. 3"},
-        {key:"safety_stock_days",label:"Stock sécurité (jours)",type:"number",ph:"ex. 2"},
-      ]},
-    F:{id:"F",label:"Safety & Ergonomics",icon:"🟣",desc:"Accidents, near-miss, TMS, non-conformités EPI",isNew:true,
-      fields:[
-        {key:"workstation",label:"Poste / Zone",type:"text",ph:"ex. Ligne conditionnement 3"},
-        {key:"incident_type",label:"Type d'incident",type:"select",opts:["Accident avec blessure","Presqu'accident","TMS","Exposition chimique","Glissade/chute","Lié équipement"]},
-        {key:"incident_count",label:"Incidents (mois)",type:"number",ph:"ex. 4"},
-        {key:"near_miss_count",label:"Near-miss (mois)",type:"number",ph:"ex. 12"},
-        {key:"days_lost",label:"Jours perdus",type:"number",ph:"ex. 8"},
-        {key:"workforce_size",label:"Effectif exposé",type:"number",ph:"ex. 35"},
-        {key:"ppe_compliance",label:"Taux conformité EPI (%)",type:"number",ph:"ex. 72"},
-      ]},
-    G:{id:"G",label:"Human Performance",icon:"🟤",desc:"Erreurs opérateurs, compétences, formation",isNew:true,
-      fields:[
-        {key:"department",label:"Département / Équipe",type:"text",ph:"ex. Équipe assemblage B"},
-        {key:"team_size",label:"Taille équipe",type:"number",ph:"ex. 12"},
-        {key:"error_rate",label:"Taux d'erreur (%)",type:"number",ph:"ex. 8.5"},
-        {key:"training_hours",label:"Heures formation moy. (6 mois)",type:"number",ph:"ex. 6"},
-        {key:"competency_coverage",label:"Couverture matrice compétences (%)",type:"number",ph:"ex. 55"},
-        {key:"turnover_rate",label:"Turnover annuel (%)",type:"number",ph:"ex. 18"},
-        {key:"task_type",label:"Type de tâche",type:"select",opts:["Assemblage / manuel","Conduite machine","Contrôle qualité","Maintenance","Logistique"]},
-      ]},
-    H:{id:"H",label:"Cost & Finance",icon:"⚫",desc:"COPQ, dépassements coûts, érosion marge",isNew:true,
-      fields:[
-        {key:"product_line",label:"Ligne produit / Centre coût",type:"text",ph:"ex. Ligne A"},
-        {key:"production_cost",label:"Coût production réel (TND/u)",type:"number",ph:"ex. 45.2"},
-        {key:"target_cost",label:"Coût cible (TND/u)",type:"number",ph:"ex. 38.0"},
-        {key:"rework_cost",label:"Coût retouches/mois (TND)",type:"number",ph:"ex. 3200"},
-        {key:"scrap_cost",label:"Coût rebuts/mois (TND)",type:"number",ph:"ex. 1800"},
-        {key:"inspection_cost",label:"Coût contrôle/mois (TND)",type:"number",ph:"ex. 1100"},
-        {key:"revenue_per_unit",label:"Revenu par unité (TND)",type:"number",ph:"ex. 72.0"},
-      ]},
-  };
-  const DOMAIN_ORDER = ["A","B","C","D","E","F","G","H"];
-
-  // ════════════════════════════════════════════
-  // HEALTH / ENV KEY CHECK
-  // ════════════════════════════════════════════
-  async function checkEnvKey() {
-    try {
-      const r = await fetch('/api/health', {signal: AbortSignal.timeout(4000)});
-      const d = await r.json();
-      if (d.status === 'ok') {
-        document.getElementById('env-dot').className = 'env-dot';
-        document.getElementById('env-label').textContent =
-                `Clé API : .env ✓ · ${d.documents} doc(s) indexé(s)`;
-      }
-    } catch {
-      document.getElementById('env-dot').className = 'env-dot warn';
-      document.getElementById('env-label').textContent = 'Backend Flask hors ligne';
-    }
-  }
-
-  // ════════════════════════════════════════════
-  // TAB SWITCH
-  // ════════════════════════════════════════════
-  function switchTab(tab) {
-    document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('visible'));
-    document.querySelectorAll('.nav-item[data-tab]').forEach(el => el.classList.remove('active'));
-    document.getElementById('tab-' + tab).classList.add('visible');
-    document.querySelector(`.nav-item[data-tab="${tab}"]`).classList.add('active');
-    if (tab === 'docs') loadDocuments();
-    if (tab === 'dsl') buildHomeDomainGrid();
-  }
-
-  // ════════════════════════════════════════════
-  // UTILS
-  // ════════════════════════════════════════════
-  function escapeHtml(s) {
-    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  }
-  function autoResize(el) {
-    el.style.height = 'auto';
-    el.style.height = Math.min(el.scrollHeight, 140) + 'px';
-  }
-  function handleKey(e) {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChat(); }
-  }
-  function fillQ(el) {
-    const q = document.getElementById('question');
-    q.value = el.textContent;
-    autoResize(q);
-    q.focus();
-  }
-
-  // ════════════════════════════════════════════
-  // CHAT RAG (Ahmed)
-  // ════════════════════════════════════════════
-  function appendMsg(role, text) {
-    const area = document.getElementById('chat-area');
-    const div = document.createElement('div');
-    div.className = 'msg ' + role;
-    div.innerHTML = `
-    <div class="msg-label">${role === 'user' ? '👤 Vous' : '✦ Ahmed'}</div>
-    <div class="msg-bubble">${escapeHtml(text)}</div>`;
-    area.appendChild(div);
-    area.scrollTop = area.scrollHeight;
-    return div;
-  }
-  function showLoading() {
-    const area = document.getElementById('chat-area');
-    const div = document.createElement('div');
-    div.className = 'msg bot'; div.id = 'loading-msg';
-    div.innerHTML = `<div class="msg-label">✦ Ahmed</div>
-    <div class="loading-bubble">
-      <div class="dots"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
-      Ahmed analyse vos documents…
-    </div>`;
-    area.appendChild(div);
-    area.scrollTop = area.scrollHeight;
-  }
-  function removeLoading() {
-    const el = document.getElementById('loading-msg');
-    if (el) el.remove();
-  }
-  async function sendChat() {
-    if (isLoading) return;
-    const qEl = document.getElementById('question');
-    const question = qEl.value.trim();
-    if (!question) return;
-    isLoading = true;
-    document.getElementById('btn-send').disabled = true;
-    document.getElementById('btn-send').textContent = '⏳ Analyse…';
-    appendMsg('user', question);
-    qEl.value = ''; qEl.style.height = 'auto';
-    showLoading();
-    try {
-      const res = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question, session_id: SESSION_ID }),
-      });
-      const data = await res.json();
-      removeLoading();
-      appendMsg('bot', data.answer || data.error || 'Erreur inconnue.');
-    } catch {
-      removeLoading();
-      appendMsg('bot', '❌ Erreur de connexion. Vérifiez que le backend Flask est démarré (python server.py).');
-    } finally {
-      isLoading = false;
-      document.getElementById('btn-send').disabled = false;
-      document.getElementById('btn-send').textContent = '➤ Envoyer';
-    }
-  }
-  async function clearChat() {
-    if (!confirm('Effacer l\'historique du chat ?')) return;
-    await fetch('/api/chat/clear', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ session_id: SESSION_ID }),
-    }).catch(() => {});
-    const area = document.getElementById('chat-area');
-    area.innerHTML = `
-    <div class="welcome-card">
-      <h2>🏭 Assistant Ahmed</h2>
-      <p>Expert en ingénierie industrielle — s'appuie en priorité sur VOS documents.<br>
-      Ajoutez vos fichiers via <strong>📂 Documents</strong>, puis posez vos questions.</p>
-      <div class="example-qs">
-        <span class="example-q" onclick="fillQ(this)">Procédure de maintenance préventive ?</span>
-        <span class="example-q" onclick="fillQ(this)">Analyser les causes de rebut sur la ligne X</span>
-        <span class="example-q" onclick="fillQ(this)">Quel est l'OEE cible selon les KPI ?</span>
-        <span class="example-q" onclick="fillQ(this)">Démarche 5 Why sur arrêt machine</span>
-      </div>
-    </div>`;
-  }
-
-  // ════════════════════════════════════════════
-  // DOCUMENTS
-  // ════════════════════════════════════════════
-  async function loadDocuments() {
-    try {
-      const res = await fetch('/api/documents');
-      const data = await res.json();
-      renderDocs(data.documents || []);
-      updateCtxBadge(data.documents || []);
-    } catch {
-      document.getElementById('docs-tbody').innerHTML =
-              '<tr><td colspan="5" class="no-docs">Erreur de chargement</td></tr>';
-    }
-  }
-  function renderDocs(docs) {
-    const tbody = document.getElementById('docs-tbody');
-    if (!docs.length) {
-      tbody.innerHTML = '<tr><td colspan="5" class="no-docs">Aucun document indexé</td></tr>';
-      return;
-    }
-    tbody.innerHTML = docs.map(d => {
-      const ext = d.name.split('.').pop().toUpperCase();
-      const sizeK = Math.round(d.chars / 1000);
-      const sizeStr = sizeK < 1000 ? sizeK + ' Ko' : (sizeK / 1000).toFixed(1) + ' Mo';
-      return `<tr>
-      <td class="doc-name">📄 ${escapeHtml(d.name)}</td>
-      <td><span class="doc-ext">${ext}</span></td>
-      <td>${sizeStr}</td>
-      <td><span class="status-ok">✅ Indexé</span></td>
-      <td><button class="btn-del-row" onclick="deleteDoc('${escapeHtml(d.name)}')">🗑</button></td>
-    </tr>`;
-    }).join('');
-  }
-  function updateCtxBadge(docs) {
-    const badge = document.getElementById('ctx-badge');
-    if (!docs.length) {
-      badge.className = 'ctx-badge warn';
-      badge.innerHTML = '⚠️ Aucun document<br>Ajoutez vos fichiers';
-    } else {
-      badge.className = 'ctx-badge ok';
-      badge.innerHTML = `✅ ${docs.length} doc(s) :<br><br>` + docs.map(d => '• ' + d.name).join('<br>');
-    }
-  }
-  function refreshContext() {
-    fetch('/api/documents').then(r => r.json())
-            .then(d => updateCtxBadge(d.documents || [])).catch(() => {});
-  }
-  async function uploadFiles(files) {
-    if (!files || !files.length) return;
-    setDocsStatus('⏳ Envoi en cours…', 'var(--yellow)');
-    const fd = new FormData();
-    Array.from(files).forEach(f => fd.append('files', f));
-    try {
-      const res = await fetch('/api/documents/upload', { method: 'POST', body: fd });
-      const data = await res.json();
-      const ok = data.added?.length;
-      setDocsStatus(
-              ok ? `✅ ${data.added.length} fichier(s) indexé(s)` + (data.errors?.length ? ` · ⚠️ ${data.errors.length} erreur(s)` : '')
-                      : '⚠️ Aucun fichier ajouté' + (data.errors?.length ? ` : ${data.errors[0]}` : ''),
-              ok ? 'var(--green)' : 'var(--yellow)'
-      );
-      loadDocuments();
-      checkEnvKey();
-    } catch { setDocsStatus('❌ Erreur d\'upload', 'var(--red)'); }
-    document.getElementById('file-input').value = '';
-  }
-  async function scanDocuments() {
-    setDocsStatus('🔄 Scan en cours…', 'var(--yellow)');
-    try {
-      const res = await fetch('/api/documents/scan', { method: 'POST' });
-      const data = await res.json();
-      setDocsStatus(
-              data.added?.length ? `✅ ${data.added.length} nouveau(x) fichier(s)` : 'ℹ️ Aucun nouveau fichier',
-              data.added?.length ? 'var(--green)' : 'var(--txt-dim)'
-      );
-      loadDocuments();
-    } catch { setDocsStatus('❌ Erreur de scan', 'var(--red)'); }
-  }
-  async function deleteDoc(name) {
-    if (!confirm(`Supprimer "${name}" de l'index ?`)) return;
-    try {
-      const res = await fetch('/api/documents/' + encodeURIComponent(name), { method: 'DELETE' });
-      if (res.ok) { setDocsStatus(`🗑 "${name}" supprimé`, 'var(--red)'); loadDocuments(); }
-    } catch {}
-  }
-  function setDocsStatus(msg, color) {
-    const el = document.getElementById('docs-status');
-    el.textContent = msg; el.style.color = color;
-  }
-  function dragOver(e) { e.preventDefault(); document.getElementById('drop-zone').classList.add('dragging'); }
-  function dragLeave() { document.getElementById('drop-zone').classList.remove('dragging'); }
-  function dropFiles(e) {
-    e.preventDefault();
-    document.getElementById('drop-zone').classList.remove('dragging');
-    uploadFiles(e.dataTransfer.files);
-  }
-
-  // ════════════════════════════════════════════
-  // DSL AGENT — NAVIGATION
-  // ════════════════════════════════════════════
-  function dslShowStep(step) {
-    ['dsl-home','dsl-select','dsl-form','dsl-loading','dsl-result'].forEach(id => {
-      const el = document.getElementById(id);
-      if (!el) return;
-      if (id === 'dsl-home') {
-        el.classList.toggle('hidden', step !== 'home');
-      } else if (id === 'dsl-loading') {
-        el.classList.toggle('active', step === 'loading');
-      } else {
-        el.classList.toggle('active', el.id === 'dsl-' + step);
-      }
-    });
-  }
-  function dslGoSelect() { buildDomainCards(); dslShowStep('select'); }
-  function dslBack(step) {
-    if (step === 'home') { dslDomain = null; dslFormData = {}; buildHomeDomainGrid(); }
-    if (step === 'select') buildDomainCards();
-    if (step === 'form') buildForm();
-    dslShowStep(step);
-  }
-  function dslGoForm() { if (!dslDomain) return; buildForm(); dslShowStep('form'); }
-
-  // ════════════════════════════════════════════
-  // DSL — GRIDS & FORM
-  // ════════════════════════════════════════════
-  function buildHomeDomainGrid() {
-    document.getElementById('home-domain-grid').innerHTML = DOMAIN_ORDER.map(id => {
-      const d = DOMAINS[id];
-      return `<div class="domain-tile" onclick="dslGoSelect()">
-      ${d.isNew ? '<span class="new-badge">NEW</span>' : ''}
-      <div class="d-icon">${d.icon}</div>
-      <div class="d-id">${d.id}</div>
-      <div class="d-lbl">${d.label}</div>
-    </div>`;
-    }).join('');
-  }
-  function buildDomainCards() {
-    document.getElementById('dsl-domain-cards').innerHTML = DOMAIN_ORDER.map(id => {
-      const d = DOMAINS[id];
-      return `<div class="dcard${dslDomain===id?' selected':''}" onclick="dslSelectDomain('${id}')">
-      ${d.isNew ? '<span class="new-badge">NEW</span>' : ''}
-      <div class="di">${d.icon}</div>
-      <div class="did">${d.id}</div>
-      <div class="dlbl">${d.label}</div>
-    </div>`;
-    }).join('');
-  }
-  function dslSelectDomain(id) {
-    dslDomain = id;
-    buildDomainCards();
-    const btn = document.getElementById('btn-continue');
-    btn.classList.add('ready');
-  }
-  function buildForm() {
-    const d = DOMAINS[dslDomain];
-    document.getElementById('form-domain-header').innerHTML = `
-    <div class="dh-top"><span class="dh-icon">${d.icon}</span><span class="dh-name">${d.id} — ${d.label}</span></div>
-    <div class="dh-desc">${d.desc}</div>`;
-    document.getElementById('form-fields').innerHTML = d.fields.map(f => `
-    <div class="field-group">
-      <label class="field-label">${f.label}</label>
-      ${f.type === 'select'
-            ? `<select class="field-select" onchange="dslUpdateField('${f.key}',this.value)">${f.opts.map(o=>`<option${dslFormData[f.key]===o?' selected':''}>${o}</option>`).join('')}</select>`
-            : `<input class="field-input" type="${f.type}" placeholder="${f.ph||''}" value="${escapeHtml(dslFormData[f.key]||'')}" oninput="dslUpdateField('${f.key}',this.value)"/>`
-    }
-    </div>`).join('');
-    document.getElementById('form-error').style.display = 'none';
-    dslUpdateConf();
-  }
-  function dslUpdateField(k, v) { dslFormData[k] = v; dslUpdateConf(); }
-  function dslCalcConf() {
-    const d = DOMAINS[dslDomain];
-    const filled = d.fields.filter(f => dslFormData[f.key] && String(dslFormData[f.key]).trim() !== '').length;
-    const nums = d.fields.filter(f => f.type==='number' && dslFormData[f.key] && Number(dslFormData[f.key])>0).length;
-    const total = d.fields.length;
-    const totalNums = d.fields.filter(f => f.type==='number').length;
-    return Math.min(97, Math.round((filled/total)*60) + Math.min(25, Math.round((nums/Math.max(1,totalNums))*25)) + 12);
-  }
-  function dslUpdateConf() {
-    const hasSome = Object.values(dslFormData).some(v => v && String(v).trim() !== '');
-    const row = document.getElementById('conf-row');
-    if (!hasSome) { row.style.display = 'none'; return; }
-    const conf = dslCalcConf();
-    const color = conf>=85?'#3fb950':conf>=60?'#d4a017':'#e05050';
-    const lbl = conf>=85?'Haute confiance':conf>=60?'Confiance modérée':'Confiance faible';
-    row.style.display = 'flex';
-    document.getElementById('conf-dot').style.background = color;
-    document.getElementById('conf-text').style.color = color;
-    document.getElementById('conf-text').textContent = `${conf}% — ${lbl}`;
-  }
-
-  // ════════════════════════════════════════════
-  // DSL — ANALYSE
-  // ════════════════════════════════════════════
-  async function dslRunAnalysis() {
-    const hasSome = Object.values(dslFormData).some(v => v && String(v).trim() !== '');
-    if (!hasSome) {
-      const errEl = document.getElementById('form-error');
-      errEl.textContent = 'Veuillez renseigner au moins un champ avant d\'analyser.';
-      errEl.style.display = 'block'; return;
-    }
-    document.getElementById('form-error').style.display = 'none';
-    dslShowStep('loading');
-
-    const d = DOMAINS[dslDomain];
-    const conf = dslCalcConf();
-    const confLabel = conf>=85?'HIGH':conf>=60?'MEDIUM':'LOW';
-    const dataStr = Object.entries(dslFormData).filter(([,v]) => v && String(v).trim()!=='').map(([k,v]) => `${k}: ${v}`).join('\n');
-
-    // Récupérer la liste des docs indexés pour info
-    let docsNote = '';
-    try {
-      const r = await fetch('/api/documents');
-      const dt = await r.json();
-      if (dt.documents?.length) {
-        docsNote = `\n\nDOCUMENTS BASE RAG (${dt.documents.length}) : ${dt.documents.map(x=>x.name).join(', ')}\n[Le chat post-A3 utilisera leur contenu complet via RAG]`;
-      }
-    } catch {}
-
-    const prompt = `Tu es DSL Agent (Data Sigma Lean 4.0), assistant IA de résolution de problèmes industriels (DMAIC).
-
-DONNÉES SOUMISES :
-${dataStr}
-
-DOMAINE : ${d.id} — ${d.label}
-CONFIANCE : ${conf}% (${confLabel})
-${docsNote}
-
-Génère un rapport Digital A3 DMAIC complet en français :
-
-## 🎯 DÉFINIR
-**Énoncé du problème :** [1 phrase, spécifique et mesurable]
-**CTQ :** [métrique clé]
-**Impact métier :** [quantifié]
-**Périmètre :** [limites de l'analyse]
-
-## 📏 MESURER
-**KPIs de référence :** [valeurs actuelles]
-**Calcul clé :** [formule + résultat avec les données soumises]
-**Qualité des données :** [commentaire]
-
-## 🔍 ANALYSER
-**5 Pourquoi :**
-1. Pourquoi → ...
-2. Pourquoi → ...
-3. Pourquoi → ...
-4. Pourquoi → ...
-5. Cause racine : ...
-
-**Ishikawa (5M) :**
-- Machine : ...
-- Méthode : ...
-- Main-d'œuvre : ...
-- Matière : ...
-- Milieu : ...
-
-## ✅ AMÉLIORER
-**Actions prioritaires :**
-1. [Action] — Outil : [Lean/SS] — Resp. : [rôle] — Délai : [semaines]
-2. [Action] — Outil : [Lean/SS] — Resp. : [rôle] — Délai : [semaines]
-3. [Action] — Outil : [Lean/SS] — Resp. : [rôle] — Délai : [semaines]
-
-## 🔒 CONTRÔLER
-**Plan de contrôle :**
-- KPI : [métrique] — Fréquence : [quotidien/hebdo] — Méthode : [SPC/audit]
-- Seuil d'alerte : [valeur]
-- Responsable : [rôle]
-
-## 📈 RÉSULTATS ATTENDUS
-**KPI cible :** [valeur spécifique après amélioration]
-**Gain estimé :** [quantifié]
-**ROI estimé :** [si calculable]
-
-## ⚠️ NOTE CONFIANCE (${confLabel} — ${conf}%)
-${conf<60?'DONNÉES INSUFFISANTES : précisez les données manquantes avant engagement de ressources.':conf<85?'CONFIANCE MODÉRÉE : quick wins immédiats + collecter plus de données pour la cause racine.':'HAUTE CONFIANCE : preuves solides, procéder au plan d\'action complet.'}
-
-Utilise les chiffres réels soumis dans les calculs. Sois direct et professionnel.`;
-
-    try {
-      const res = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question: prompt, session_id: 'dsl_a3_' + SESSION_ID }),
-      });
-      const data = await res.json();
-      if (data.error) throw new Error(data.error);
-      dslA3 = data.answer || 'Pas de réponse.';
-      dslPanelHistory = [];
-      dslShowResult(conf);
-    } catch (e) {
-      const errEl = document.getElementById('form-error');
-      errEl.textContent = 'Erreur API : ' + e.message;
-      errEl.style.display = 'block';
-      dslShowStep('form');
-    }
-  }
-
-  function dslShowResult(conf) {
-    const d = DOMAINS[dslDomain];
-    document.getElementById('result-title').textContent = `A3 — ${d.icon} ${d.label}`;
-    document.getElementById('a3-content').textContent = dslA3;
-    const color = conf>=85?'#3fb950':conf>=60?'#d4a017':'#e05050';
-    const lbl = conf>=85?'Haute confiance':conf>=60?'Confiance modérée':'Faible confiance';
-    document.getElementById('result-conf').innerHTML =
-            `<div class="conf-badge" style="background:${color}18;border:1px solid ${color};color:${color};margin-bottom:14px">
-      <span>●</span> ${conf}% — ${lbl}
-    </div>`;
-    // Init panel chat
-    const msgs = document.getElementById('panel-msgs');
-    msgs.innerHTML = '';
-    dslPanelHistory = [];
-    addPanelMsg('bot', 'Rapport A3 généré ✓\n\nJe m\'appuie sur vos documents indexés pour répondre. Posez vos questions sur cette analyse.');
-    dslUpdateRagInfo();
-    dslShowStep('result');
-  }
-
-  function copyA3() {
-    navigator.clipboard.writeText(dslA3).then(() => alert('Rapport copié !')).catch(() => {});
-  }
-
-  // ════════════════════════════════════════════
-  // DSL — PANEL CHAT RAG (post-A3)
-  // ════════════════════════════════════════════
-  async function dslUpdateRagInfo() {
-    try {
-      const r = await fetch('/api/documents');
-      const d = await r.json();
-      const n = d.documents?.length || 0;
-      document.getElementById('rag-info').textContent =
-              n > 0 ? `📄 ${n} doc(s) indexé(s) — contexte RAG actif` : '⚠️ Aucun document — réponses basées sur bonnes pratiques';
-    } catch {
-      document.getElementById('rag-info').textContent = '⚠️ Backend non connecté';
-    }
-  }
-
-  function addPanelMsg(role, content) {
-    const msgs = document.getElementById('panel-msgs');
-    const div = document.createElement('div');
-    div.className = 'pmsg ' + role;
-    div.textContent = content;
-    msgs.appendChild(div);
-    msgs.scrollTop = msgs.scrollHeight;
-    return div;
-  }
-
-  async function sendPanel() {
-    if (dslPanelLoading) return;
-    const inputEl = document.getElementById('panel-input');
-    const q = inputEl.value.trim();
-    if (!q) return;
-    inputEl.value = '';
-    document.getElementById('panel-send').disabled = true;
-    dslPanelLoading = true;
-
-    addPanelMsg('user', q);
-    const thinking = addPanelMsg('bot', '…');
-    thinking.classList.add('thinking');
-
-    dslPanelHistory.push({ role: 'user', content: q });
-
-    // On envoie via /api/chat qui utilise le RAG complet côté Flask
-    // On ajoute le contexte A3 dans la question initiale si premier message
-    const contextualQ = dslPanelHistory.length === 1
-            ? `[Contexte : rapport A3 DMAIC généré pour le domaine ${DOMAINS[dslDomain].label}]\n\nRapport A3 :\n${dslA3.slice(0, 800)}…\n\nQuestion : ${q}`
-            : q;
-
-    try {
-      const res = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          question: contextualQ,
-          session_id: 'dsl_chat_' + SESSION_ID,
-        }),
-      });
-      const data = await res.json();
-      const ans = data.answer || data.error || 'Erreur.';
-      thinking.textContent = ans;
-      thinking.classList.remove('thinking');
-      dslPanelHistory.push({ role: 'assistant', content: ans });
-    } catch (e) {
-      thinking.textContent = '❌ Erreur : ' + e.message;
-      thinking.classList.remove('thinking');
-    }
-    dslPanelLoading = false;
-    document.getElementById('panel-send').disabled = false;
-  }
-
-  function panelKeydown(e) {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendPanel(); }
-  }
-
-  // ════════════════════════════════════════════
-  // INIT
-  // ════════════════════════════════════════════
-  window.addEventListener('DOMContentLoaded', () => {
-    checkEnvKey();
-    refreshContext();
-    buildHomeDomainGrid();
-  });
-</script>
+<script src="/static/app.js"></script>
 </body>
 </html>

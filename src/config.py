@@ -32,7 +32,8 @@ CLAUDE_MODELS: tuple[str, ...] = (
 DEFAULT_MODEL = CLAUDE_MODELS[0]
 
 # ── Paramètres de génération ────────────────────────────────────────────────
-MAX_OUTPUT_TOKENS = 4096
+MAX_OUTPUT_TOKENS     = 4096   # Chat RAG (Ahmed)
+MAX_OUTPUT_TOKENS_DSL = 8192   # DSL Agent — Digital A3 complet peut atteindre ~6 000 tokens
 TEMPERATURE = 0.2
 
 # ── Paramètres de robustesse (retry) ────────────────────────────────────────
