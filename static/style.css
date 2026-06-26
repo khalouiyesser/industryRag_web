@@ -717,6 +717,54 @@ header {
 }
 
 /* ══════════════════════════════════════════
+   MULTI-REPORT TABS (tous les types d'output)
+══════════════════════════════════════════ */
+.multi-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+.multi-tab {
+  background: var(--input-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 13px;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: 'DM Sans', sans-serif;
+  color: var(--txt-dim);
+  cursor: pointer;
+  transition: all .15s;
+  white-space: nowrap;
+}
+.multi-tab:hover { color: var(--txt); border-color: var(--txt-dim); }
+.multi-tab.active { font-weight: 700; }
+.multi-panel { }
+
+/* Badge "tous les rapports" dans le form header */
+.dh-all-badge {
+  margin-top: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(74,158,255,.1);
+  border: 1px solid rgba(74,158,255,.3);
+  color: var(--blue);
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+@media (max-width: 640px) {
+  .multi-tabs { gap: 4px; }
+  .multi-tab { font-size: 11px; padding: 5px 10px; }
+}
+
+/* ══════════════════════════════════════════
    SCROLLBAR
 ══════════════════════════════════════════ */
 ::-webkit-scrollbar { width: 5px; height: 5px; }
@@ -809,4 +857,3 @@ header {
   .result-actions { gap: 4px; }
   .icon-btn { padding: 4px 7px; font-size: 11px; }
 }
-

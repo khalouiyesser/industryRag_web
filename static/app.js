@@ -17,53 +17,170 @@ let dslFormData = {};
 let dslA3 = '';
 let dslPanelHistory = [];
 let dslPanelLoading = false;
-let dslResult  = null;
-let dslRawText = '';
+let dslResult   = null;   // kept for compat
+let dslRawText  = '';
+let dslAllResults = {};   // { output_type_id: {result, raw} } — tous les types générés
+let dslActiveTab  = null; // onglet actif dans la vue résultat
 
 // ════════════════════════════════════════════
-// DOMAINES DSL
+// OUTPUT TYPES — Tables 49-54 du rapport PFE
+// Logique de sélection : urgence × audience × situation (Table 55)
+// ════════════════════════════════════════════
+const OUTPUT_TYPES = [
+  { id:'digital_a3',   label:'📋 Digital A3 Report',     shortLabel:'A3',
+    desc:'Analyse DMAIC complète — 8 sections, root cause, plan d\'action, contrôle',
+    audience:'Ingénieur Qualité / Maintenance / Process',
+    trigger:'Déviation significative (> 2× cible), problème récurrent ou audit',
+    time:'< 45s', color:'#4a9eff' },
+  { id:'kpi_alert',    label:'⚠️ Real-Time KPI Alert',   shortLabel:'Alerte',
+    desc:'Alerte compacte 5 champs — seuil dépassé, cause probable, action immédiate',
+    audience:'Opérateur sur le poste',
+    trigger:'KPI dépasse un seuil en temps réel (< 30 min)',
+    time:'< 5s',  color:'#e05050' },
+  { id:'quick_fix',    label:'🔧 Quick-Fix Action Card',  shortLabel:'Quick-Fix',
+    desc:'Carte 4 champs — cause évidente, actions exécutables ce shift',
+    audience:'Technicien / Opérateur (sans escalade superviseur)',
+    trigger:'Problème mineur connu, cause unique, premier shift',
+    time:'< 15s', color:'#d4a017' },
+  { id:'exec_summary', label:'📊 Executive Summary',      shortLabel:'Exec',
+    desc:'Vue synthèse 5 sections — traffic-light par domaine, COPQ, actions semaine',
+    audience:'Superviseur / Chef de production / Directeur',
+    trigger:'Revue hebdo/mensuelle de performance multi-domaines',
+    time:'< 30s', color:'#3fb950' },
+  { id:'cbam_report',  label:'🌍 CBAM Compliance Report', shortLabel:'CBAM',
+    desc:'Rapport CO₂ 7 sections — intensité/unité, conformité EU 2023/956, exposition financière',
+    audience:'Responsable énergie / Compliance officer',
+    trigger:'Reporting mensuel EU Reg. 2023/956 (export EU)',
+    time:'< 60s', color:'#8b5cf6' },
+  { id:'cross_domain', label:'🔗 Cross-Domain Report',    shortLabel:'Cross',
+    desc:'Analyse inter-domaines — chaîne causale, facteur amplification, plan intégré',
+    audience:'Ingénieur process / Green Belt',
+    trigger:'Symptômes détectés simultanément sur 2+ domaines',
+    time:'< 60s', color:'#f59e0b' },
+];
+
+// ── Trigger keywords par domaine (Table 48) ───────────────────────────────
+const DOMAIN_TRIGGERS = {
+  A: ['defect_rate','batch_rejected','cpk_value','rework_hours','scrap_weight',
+    'defective_units','total_units','usl','lsl','defect_type'],
+  B: ['oee_value','downtime_hours','downtime','mtbf','failure_mode',
+    'vibration_alert','mttr','planned_time','actual_output','theoretical_output'],
+  C: ['lead_time','wip','takt_time','cycle_time','otd','bottleneck',
+    'customer_demand','available_time','current_lead_time'],
+  D: ['energy_kwh','energy_consumed','co2_equivalent','co2_factor',
+    'compressed_air_m3','idle_time','idle_time_pct','power_factor',
+    'energy_source','target_intensity','production_volume'],
+};
+
+// ── Auto-sélection output type (Table 55) ─────────────────────────────────
+function autoSelectOutputType(formData, domain) {
+  const keys = Object.keys(formData).filter(k => formData[k] && String(formData[k]).trim() !== '');
+  // Cross-domain : champs de 2+ domaines détectés
+  const domainsDetected = Object.entries(DOMAIN_TRIGGERS)
+      .filter(([, trigs]) => trigs.some(t => keys.includes(t)))
+      .map(([d]) => d);
+  if (domainsDetected.length >= 2) return 'cross_domain';
+  // Domaine D avec données CO₂ → CBAM
+  if (domain === 'D' && keys.some(k => ['energy_consumed','co2_factor','target_intensity'].includes(k)))
+    return 'cbam_report';
+  // Déviation KPI critique → alerte (Table 50)
+  const dr = parseFloat(formData.defective_units) / parseFloat(formData.total_units);
+  if (!isNaN(dr) && dr > 0.05) return 'kpi_alert';
+  const avail = (parseFloat(formData.planned_time) - parseFloat(formData.downtime)) / parseFloat(formData.planned_time);
+  const perf  = parseFloat(formData.actual_output) / parseFloat(formData.theoretical_output);
+  const oee   = avail * perf;
+  if (!isNaN(oee) && oee < 0.70) return 'kpi_alert';
+  // Peu de champs → Quick-Fix
+  if (keys.length <= 3) return 'quick_fix';
+  return 'digital_a3';
+}
+
+// ── Cross-domain patterns (Table 56) ─────────────────────────────────────
+const CROSS_PATTERNS = [
+  { combo:['A','B'], label:'Qualité ↔ Maintenance',
+    desc:'Dégradation équipement (B) → variabilité process → taux défauts (A)',
+    action:'TPM corrective + Poka-Yoke' },
+  { combo:['B','D'], label:'Maintenance ↔ Énergie',
+    desc:'Machine dégradée (B) consomme 30-40% énergie excédentaire (D)',
+    action:'TPM + installation VFD' },
+  { combo:['C','D'], label:'Flux ↔ Énergie',
+    desc:'WIP accumulé (C) → machines idle consomment de l\'énergie (D)',
+    action:'Kanban pull + auto-standby CNC' },
+  { combo:['A','G'], label:'Qualité ↔ Formation',
+    desc:'Lacunes compétences opérateurs (G) → variabilité process (A)',
+    action:'Standard Work OJT/TWI + Poka-Yoke' },
+  { combo:['D','H'], label:'Énergie ↔ Coûts',
+    desc:'Surconsommation (D) → coût/unité ↑ + exposition CBAM (H)',
+    action:'DMAIC énergie + modèle coût PAF' },
+];
+
+// ════════════════════════════════════════════
+// DOMAINES DSL — Table 48 (trigger keywords + tools enrichis)
 // ════════════════════════════════════════════
 const DOMAINS = {
-  A:{id:"A",label:"Quality & Defects",icon:"🔴",desc:"Taux de défauts, non-conformités, rebuts, retouches",
+  A:{id:"A",label:"Quality & Defects",icon:"🔴",
+    metric:"Defect rate · DPMO · Cp/Cpk",
+    tools:"FMEA · Pareto · Fishbone 5M · SPC P-chart · Poka-Yoke · 5 Whys",
+    desc:"Taux de défauts, non-conformités, rebuts, retouches",
     fields:[
       {key:"machine",label:"Machine / Line ID",type:"text",ph:"ex. PL-03"},
       {key:"total_units",label:"Total unités produites",type:"number",ph:"ex. 241"},
       {key:"defective_units",label:"Unités défectueuses",type:"number",ph:"ex. 28"},
       {key:"defect_type",label:"Type de défaut",type:"text",ph:"ex. Rayures surface"},
+      {key:"batch_rejected",label:"Lots rejetés",type:"number",ph:"ex. 3"},
+      {key:"rework_hours",label:"Heures de retouche",type:"number",ph:"ex. 4.5"},
+      {key:"scrap_weight",label:"Poids rebuts (kg)",type:"number",ph:"ex. 12.4"},
+      {key:"cpk_value",label:"Cpk mesuré",type:"number",ph:"ex. 0.82"},
       {key:"shift",label:"Équipe",type:"select",opts:["Matin","Après-midi","Nuit"]},
       {key:"usl",label:"Limite supérieure USL",type:"number",ph:"ex. 25.5 mm"},
       {key:"lsl",label:"Limite inférieure LSL",type:"number",ph:"ex. 24.5 mm"},
     ]},
-  B:{id:"B",label:"Maintenance & OEE",icon:"🟠",desc:"Pannes, disponibilité, MTTR, TRS",
+  B:{id:"B",label:"Maintenance & OEE",icon:"🟠",
+    metric:"OEE · MTBF · MTTR",
+    tools:"FMEA RPN · TPM · SMED · OEE A×P×Q · MTBF/MTTR analysis",
+    desc:"Pannes, disponibilité, MTTR, TRS",
     fields:[
       {key:"machine",label:"ID Machine",type:"text",ph:"ex. Moteur M-07"},
       {key:"planned_time",label:"Temps planifié (h)",type:"number",ph:"ex. 8"},
       {key:"downtime",label:"Temps d'arrêt total (h)",type:"number",ph:"ex. 2.3"},
-      {key:"downtime_reason",label:"Cause principale",type:"text",ph:"ex. Défaillance roulement"},
+      {key:"downtime_reason",label:"Cause principale / failure_mode",type:"text",ph:"ex. Défaillance roulement"},
+      {key:"vibration_alert",label:"Alerte vibration (mm/s)",type:"number",ph:"ex. 12.4"},
+      {key:"mtbf",label:"MTBF (h)",type:"number",ph:"ex. 145"},
+      {key:"mttr",label:"MTTR (h)",type:"number",ph:"ex. 3.2"},
       {key:"actual_output",label:"Production réelle (u)",type:"number",ph:"ex. 180"},
       {key:"theoretical_output",label:"Production théorique (u)",type:"number",ph:"ex. 240"},
       {key:"defective_units",label:"Unités défectueuses",type:"number",ph:"ex. 21"},
     ]},
-  C:{id:"C",label:"Flow & Lead Time",icon:"🟡",desc:"Délais, WIP, goulots, livraisons tardives",
+  C:{id:"C",label:"Flow & Lead Time",icon:"🟡",
+    metric:"Lead time · WIP · Takt time",
+    tools:"VSM · Kanban sizing · Takt analysis · Heijunka · Line balancing",
+    desc:"Délais, WIP, goulots, livraisons tardives",
     fields:[
       {key:"product",label:"Produit / Processus",type:"text",ph:"ex. Ligne assemblage 2"},
       {key:"customer_demand",label:"Demande client (u/jour)",type:"number",ph:"ex. 150"},
       {key:"available_time",label:"Temps dispo (min/jour)",type:"number",ph:"ex. 480"},
       {key:"current_lead_time",label:"Lead time actuel (h)",type:"number",ph:"ex. 18.4"},
+      {key:"cycle_time",label:"Cycle time (min/u)",type:"number",ph:"ex. 3.2"},
       {key:"wip",label:"WIP actuel (u en file)",type:"number",ph:"ex. 340"},
-      {key:"otd",label:"Taux livraison à temps (%)",type:"number",ph:"ex. 67"},
+      {key:"otd",label:"Taux livraison à temps OTD (%)",type:"number",ph:"ex. 67"},
       {key:"bottleneck",label:"Goulot identifié",type:"text",ph:"ex. Poste peinture"},
     ]},
-  D:{id:"D",label:"Energy & Environment",icon:"🟢",desc:"Surconsommation, CO₂, ISO 14001/50001",
+  D:{id:"D",label:"Energy & Environment",icon:"🟢",
+    metric:"kWh/unit · CO₂/shift",
+    tools:"Green FMEA · E-VSM · ISO 50001 SPC · Energy Poka-Yoke · CBAM KPI",
+    desc:"Surconsommation, CO₂, ISO 14001/50001",
     fields:[
       {key:"site",label:"Site / Département",type:"text",ph:"ex. Atelier usinage"},
-      {key:"energy_consumed",label:"Énergie consommée (kWh/mois)",type:"number",ph:"ex. 12500"},
+      {key:"energy_consumed",label:"Énergie consommée kWh/mois",type:"number",ph:"ex. 12500"},
       {key:"production_volume",label:"Volume production (u/mois)",type:"number",ph:"ex. 4200"},
       {key:"target_intensity",label:"Intensité cible (kWh/u)",type:"number",ph:"ex. 2.0"},
       {key:"idle_time_pct",label:"Temps machine idle (%)",type:"number",ph:"ex. 22"},
-      {key:"co2_factor",label:"Facteur CO₂ (kg/kWh)",type:"number",ph:"ex. 0.25"},
-      {key:"energy_source",label:"Source énergie",type:"select",opts:["Réseau électrique","Gaz naturel","Mixte","Renouvelable","Autre"]},
+      {key:"co2_factor",label:"Facteur CO₂ kg/kWh (STEG : 0.233)",type:"number",ph:"ex. 0.233"},
+      {key:"compressed_air_m3",label:"Air comprimé (m³/mois)",type:"number",ph:"ex. 3400"},
+      {key:"power_factor",label:"Facteur de puissance (cosφ)",type:"number",ph:"ex. 0.82"},
+      {key:"energy_source",label:"Source énergie",type:"select",opts:["Réseau électrique (STEG)","Gaz naturel","Mixte","Renouvelable","Autre"]},
     ]},
+
   E:{id:"E",label:"Supply Chain",icon:"🔵",desc:"Ruptures stock, délais fournisseurs, bullwhip",isSoon:true,isLocked:true,
     fields:[
       {key:"supplier",label:"Fournisseur / Catégorie",type:"text",ph:"ex. MP — Fournisseur X"},
@@ -106,6 +223,7 @@ const DOMAINS = {
     ]},
 };
 const DOMAIN_ORDER = ["A","B","C","D","E","F","G","H"];
+
 
 // ════════════════════════════════════════════
 // HEALTH / ENV KEY CHECK
@@ -375,7 +493,7 @@ function dslShowStep(step) {
 }
 function dslGoSelect() { buildDomainCards(); dslShowStep('select'); }
 function dslBack(step) {
-  if (step === 'home') { dslDomain = null; dslFormData = {}; buildHomeDomainGrid(); }
+  if (step === 'home') { dslDomain = null; dslFormData = {}; dslOutputType = 'digital_a3'; buildHomeDomainGrid(); }
   if (step === 'select') buildDomainCards();
   if (step === 'form') buildForm();
   dslShowStep(step);
@@ -426,19 +544,27 @@ function buildForm() {
   const d = DOMAINS[dslDomain];
   document.getElementById('form-domain-header').innerHTML = `
     <div class="dh-top"><span class="dh-icon">${d.icon}</span><span class="dh-name">${d.id} — ${d.label}</span></div>
-    <div class="dh-desc">${d.desc}</div>`;
-  document.getElementById('form-fields').innerHTML = d.fields.map(f => `
-    <div class="field-group">
-      <label class="field-label">${f.label}</label>
-      ${f.type === 'select'
-      ? `<select class="field-select" onchange="dslUpdateField('${f.key}',this.value)">${f.opts.map(o=>`<option${dslFormData[f.key]===o?' selected':''}>${o}</option>`).join('')}</select>`
-      : `<input class="field-input" type="${f.type}" placeholder="${f.ph||''}" value="${escapeHtml(dslFormData[f.key]||'')}" oninput="dslUpdateField('${f.key}',this.value)"/>`
-  }
-    </div>`).join('');
+    <div class="dh-desc">${d.desc}</div>
+    <div class="dh-tools" style="margin-top:6px;font-size:11px;color:var(--txt-dark)">🔧 ${escapeHtml(d.tools || '')}</div>
+    <div class="dh-all-badge">⚡ Tous les rapports seront générés automatiquement</div>`;
+
+  document.getElementById('form-fields').innerHTML = d.fields.map(f => {
+    const valStr = escapeHtml(dslFormData[f.key] || '');
+    if (f.type === 'select') {
+      const opts = f.opts.map(o => `<option${dslFormData[f.key]===o?' selected':''}>${o}</option>`).join('');
+      return `<div class="field-group"><label class="field-label">${f.label}</label><select class="field-select" onchange="dslUpdateField('${f.key}',this.value)">${opts}</select></div>`;
+    }
+    return `<div class="field-group"><label class="field-label">${f.label}</label><input class="field-input" type="${f.type}" placeholder="${f.ph||''}" value="${valStr}" oninput="dslUpdateField('${f.key}',this.value)"/></div>`;
+  }).join('');
+
   document.getElementById('form-error').style.display = 'none';
   dslUpdateConf();
 }
-function dslUpdateField(k, v) { dslFormData[k] = v; dslUpdateConf(); }
+
+function dslUpdateField(k, v) {
+  dslFormData[k] = v;
+  dslUpdateConf();
+}
 function dslCalcConf() {
   const d = DOMAINS[dslDomain];
   const filled = d.fields.filter(f => dslFormData[f.key] && String(dslFormData[f.key]).trim() !== '').length;
@@ -448,7 +574,7 @@ function dslCalcConf() {
   return Math.min(97, Math.round((filled/total)*60) + Math.min(25, Math.round((nums/Math.max(1,totalNums))*25)) + 12);
 }
 function dslUpdateConf() {
-  const hasSome = Object.values(dslFormData).some(v => v && String(v).trim() !== '');
+  const hasSome = Object.entries(dslFormData).some(([k,v]) => v && String(v).trim() !== '');
   const row = document.getElementById('conf-row');
   if (!hasSome) { row.style.display = 'none'; return; }
   const conf = dslCalcConf();
@@ -459,6 +585,8 @@ function dslUpdateConf() {
   document.getElementById('conf-text').style.color = color;
   document.getElementById('conf-text').textContent = `${conf}% — ${lbl}`;
 }
+
+
 
 // ════════════════════════════════════════════
 // DSL — ANALYSE  →  /api/dsl/analyze
@@ -481,8 +609,13 @@ function tryParseJson(raw) {
   return null;
 }
 
+// ════════════════════════════════════════════
+// DSL — ANALYSE MULTI-OUTPUT → /api/dsl/analyze
+// Génère TOUS les types de rapport en parallèle
+// ════════════════════════════════════════════
 async function dslRunAnalysis() {
-  const hasSome = Object.values(dslFormData).some(v => v && String(v).trim() !== '');
+  const hasSome = Object.entries(dslFormData)
+      .some(([,v]) => v && String(v).trim() !== '');
   if (!hasSome) {
     const errEl = document.getElementById('form-error');
     errEl.textContent = "Veuillez renseigner au moins un champ avant d'analyser.";
@@ -490,29 +623,70 @@ async function dslRunAnalysis() {
   }
   document.getElementById('form-error').style.display = 'none';
   dslShowStep('loading');
+
+  const loadingEl = document.getElementById('loading-text');
+  if (loadingEl) loadingEl.textContent = 'Génération de tous les rapports en parallèle…';
+
   const conf = dslCalcConf();
 
-  try {
-    const res = await fetch('/api/dsl/analyze', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        form_data:   dslFormData,
-        domain:      dslDomain,
-        output_type: 'digital_a3',
-        session_id:  'dsl_' + SESSION_ID,
-      }),
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Erreur serveur');
+  // ── Détermine quels output types générer selon le domaine ──────────────
+  // Domaine D → tous les 6 types pertinents
+  // Autres domaines → 4 types principaux (A3, Alert, Quick-Fix, Exec + Cross si multi)
+  const keys = Object.keys(dslFormData).filter(k => dslFormData[k] && String(dslFormData[k]).trim() !== '');
+  const domainsDetected = Object.entries(DOMAIN_TRIGGERS)
+      .filter(([, trigs]) => trigs.some(t => keys.includes(t))).map(([d]) => d);
+  const isMultiDomain = domainsDetected.length >= 2;
 
-    dslRawText = data.raw_answer || '';
-    dslResult = (data.result && typeof data.result === 'object')
-        ? data.result
-        : tryParseJson(dslRawText);
+  let typesToGenerate;
+  if (dslDomain === 'D') {
+    // Domaine Énergie : tous les 6
+    typesToGenerate = OUTPUT_TYPES.map(o => o.id);
+  } else if (isMultiDomain) {
+    typesToGenerate = ['digital_a3', 'kpi_alert', 'quick_fix', 'exec_summary', 'cross_domain'];
+  } else {
+    typesToGenerate = ['digital_a3', 'kpi_alert', 'quick_fix', 'exec_summary'];
+  }
+
+  // ── Helper : un appel API ──────────────────────────────────────────────
+  async function callAnalyze(outputType) {
+    try {
+      const res = await fetch('/api/dsl/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          form_data:   dslFormData,
+          domain:      dslDomain,
+          output_type: outputType,
+          session_id:  'dsl_' + SESSION_ID,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) return { result: null, raw: data.error || 'Erreur serveur', error: true };
+      const raw = data.raw_answer || '';
+      const result = (data.result && typeof data.result === 'object')
+          ? data.result : tryParseJson(raw);
+      return { result, raw, error: false };
+    } catch (e) {
+      return { result: null, raw: e.message, error: true };
+    }
+  }
+
+  try {
+    // ── Appels parallèles ────────────────────────────────────────────────
+    const promises = typesToGenerate.map(id => callAnalyze(id).then(r => [id, r]));
+    const settled  = await Promise.all(promises);
+
+    dslAllResults = {};
+    settled.forEach(([id, r]) => { if (!r.error) dslAllResults[id] = r; });
+
+    // compat: premier résultat dans dslResult
+    const firstId  = typesToGenerate.find(id => dslAllResults[id]) || typesToGenerate[0];
+    dslResult  = dslAllResults[firstId]?.result || null;
+    dslRawText = dslAllResults[firstId]?.raw    || '';
+    dslActiveTab = firstId;
 
     dslPanelHistory = [];
-    dslShowResult(conf);
+    dslShowResult(conf, typesToGenerate);
   } catch (e) {
     const errEl = document.getElementById('form-error');
     errEl.textContent = 'Erreur API : ' + e.message;
@@ -521,31 +695,96 @@ async function dslRunAnalysis() {
   }
 }
 
-// ── Affichage du résultat ─────────────────────────────────────────────────
-function dslShowResult(conf) {
+// ── Affichage du résultat avec onglets dynamiques ────────────────────────────
+function dslShowResult(conf, typesToGenerate) {
   const d = DOMAINS[dslDomain];
-  document.getElementById('result-title').textContent = `A3 — ${d.icon} ${d.label}`;
+
+  // Titre principal
+  document.getElementById('result-title').textContent =
+      `${d.icon} ${d.label} — ${Object.keys(dslAllResults).length} rapports`;
+
+  // Badge confiance
   const color = conf>=85?'#3fb950':conf>=60?'#d4a017':'#e05050';
   const lbl   = conf>=85?'Haute confiance':conf>=60?'Confiance modérée':'Faible confiance';
   const confBadgeStyle = 'background:' + color + '18;border:1px solid ' + color + ';color:' + color;
   document.getElementById('result-conf').innerHTML =
-      `<div class="conf-badge" style="${confBadgeStyle}">
-      <span>●</span> ${conf}% — ${lbl}
-    </div>`;
+      `<div class="conf-badge" style="${confBadgeStyle}"><span>●</span> ${conf}% — ${lbl}</div>`;
+
+  // Barre d'onglets
   const container = document.getElementById('a3-content');
-  if (dslResult && typeof dslResult === 'object') {
-    container.innerHTML = renderA3Json(dslResult);
-  } else {
-    container.style.whiteSpace = 'pre-wrap';
-    container.textContent = dslRawText || 'Pas de réponse.';
-  }
+  const availableTypes = (typesToGenerate || OUTPUT_TYPES.map(o=>o.id))
+      .filter(id => dslAllResults[id]);
+
+  const tabsHtml = availableTypes.map(id => {
+    const ot = OUTPUT_TYPES.find(o => o.id === id);
+    if (!ot) return '';
+    const isActive = id === dslActiveTab;
+    const btnStyle = isActive
+        ? ('background:' + ot.color + '18;border-color:' + ot.color + ';color:' + ot.color)
+        : '';
+    return `<button class="multi-tab${isActive ? ' active' : ''}" id="mtab-${id}"
+      style="${btnStyle}" onclick="dslSwitchTab('${id}')">
+      ${escapeHtml(ot.label)}
+    </button>`;
+  }).join('');
+
+  // Panneaux (tous générés, un seul visible)
+  const panelsHtml = availableTypes.map(id => {
+    const display = id === dslActiveTab ? '' : 'display:none';
+    return `<div class="multi-panel" id="mpanel-${id}" style="${display}"></div>`;
+  }).join('');
+
+  container.innerHTML = `
+    <div class="multi-tabs" id="multi-tabs">${tabsHtml}</div>
+    ${panelsHtml}`;
+
+  // Render chaque panneau
+  availableTypes.forEach(id => {
+    const panel = document.getElementById('mpanel-' + id);
+    if (!panel) return;
+    const { result, raw } = dslAllResults[id];
+    if (result && typeof result === 'object') {
+      panel.innerHTML = renderA3Json(result);
+    } else {
+      panel.style.whiteSpace = 'pre-wrap';
+      panel.textContent = raw || 'Pas de réponse.';
+    }
+  });
+
+  // Panel chat RAG
   const msgs = document.getElementById('panel-msgs');
   msgs.innerHTML = '';
   dslPanelHistory = [];
-  addPanelMsg('bot', 'Rapport A3 généré ✓\n\nJe m\'appuie sur vos documents indexés. Posez vos questions sur cette analyse.');
+  addPanelMsg('bot',
+      `${Object.keys(dslAllResults).length} rapports générés ✓\n\nPosez vos questions sur l'analyse — je m'appuie sur vos documents indexés.`);
   dslUpdateRagInfo();
   dslShowStep('result');
 }
+
+// ── Switcher d'onglets ────────────────────────────────────────────────────
+function dslSwitchTab(id) {
+  dslActiveTab = id;
+  // Reset tous les tabs
+  document.querySelectorAll('.multi-tab').forEach(btn => {
+    btn.classList.remove('active');
+    btn.style.background = '';
+    btn.style.borderColor = '';
+    btn.style.color = '';
+  });
+  document.querySelectorAll('.multi-panel').forEach(p => p.style.display = 'none');
+  // Activer le tab cliqué
+  const ot = OUTPUT_TYPES.find(o => o.id === id);
+  const btn = document.getElementById('mtab-' + id);
+  if (btn && ot) {
+    btn.classList.add('active');
+    btn.style.background = ot.color + '18';
+    btn.style.borderColor = ot.color;
+    btn.style.color = ot.color;
+  }
+  const panel = document.getElementById('mpanel-' + id);
+  if (panel) panel.style.display = '';
+}
+
 
 // ════════════════════════════════════════════
 // DSL — RENDERERS JSON
