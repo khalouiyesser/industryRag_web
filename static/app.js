@@ -624,7 +624,8 @@ function tryParseJson(raw) {
 
 // ════════════════════════════════════════════
 // DSL — ANALYSE MULTI-OUTPUT → /api/dsl/analyze
-// Génère TOUS les types de rapport en parallèle
+// Appels séquentiels avec affichage progressif
+// (évite le timeout Render free tier ~30s)
 // ════════════════════════════════════════════
 async function dslRunAnalysis() {
   const hasSome = Object.entries(dslFormData)
@@ -635,35 +636,20 @@ async function dslRunAnalysis() {
     errEl.style.display = 'block'; return;
   }
   document.getElementById('form-error').style.display = 'none';
-  dslShowStep('loading');
-
-  const loadingEl = document.getElementById('loading-text');
-  if (loadingEl) loadingEl.textContent = 'Génération de tous les rapports en parallèle…';
 
   const conf = dslCalcConf();
+  const typesToGenerate = OUTPUT_TYPES.map(o => o.id); // tous les 6
 
-  // ── Détermine quels output types générer selon le domaine ──────────────
-  // Domaine D → tous les 6 types pertinents
-  // Autres domaines → 4 types principaux (A3, Alert, Quick-Fix, Exec + Cross si multi)
-  const keys = Object.keys(dslFormData).filter(k => dslFormData[k] && String(dslFormData[k]).trim() !== '');
-  const domainsDetected = Object.entries(DOMAIN_TRIGGERS)
-      .filter(([, trigs]) => trigs.some(t => keys.includes(t))).map(([d]) => d);
-  const isMultiDomain = domainsDetected.length >= 2;
+  // ── Initialise la vue résultat avec onglets vides ─────────────────────
+  dslAllResults = {};
+  dslActiveTab  = typesToGenerate[0];
+  dslResult     = null;
+  dslRawText    = '';
+  dslPanelHistory = [];
+  dslInitResult(conf, typesToGenerate);  // affiche la structure immédiatement
+  dslShowStep('result');
 
-  let typesToGenerate;
-  if (dslDomain === 'D') {
-    // Domaine Énergie : tous les 6
-    typesToGenerate = OUTPUT_TYPES.map(o => o.id);
-  } else if (dslDomain === 'A') {
-    // Domaine Qualité : A3 + Alerte KPI + Quick-Fix
-    typesToGenerate = ['digital_a3', 'kpi_alert', 'quick_fix'];
-  } else if (isMultiDomain) {
-    typesToGenerate = ['digital_a3', 'kpi_alert', 'quick_fix', 'exec_summary', 'cross_domain'];
-  } else {
-    typesToGenerate = ['digital_a3', 'kpi_alert', 'quick_fix', 'exec_summary'];
-  }
-
-  // ── Helper : un appel API ──────────────────────────────────────────────
+  // ── Helper : un appel API ─────────────────────────────────────────────
   async function callAnalyze(outputType) {
     try {
       const res = await fetch('/api/dsl/analyze', {
@@ -687,85 +673,33 @@ async function dslRunAnalysis() {
     }
   }
 
-  try {
-    // ── Appels parallèles ────────────────────────────────────────────────
-    const promises = typesToGenerate.map(id => callAnalyze(id).then(r => [id, r]));
-    const settled  = await Promise.all(promises);
-
-    dslAllResults = {};
-    settled.forEach(([id, r]) => { if (!r.error) dslAllResults[id] = r; });
-
-    // compat: premier résultat dans dslResult
-    const firstId  = typesToGenerate.find(id => dslAllResults[id]) || typesToGenerate[0];
-    dslResult  = dslAllResults[firstId]?.result || null;
-    dslRawText = dslAllResults[firstId]?.raw    || '';
-    dslActiveTab = firstId;
-
-    dslPanelHistory = [];
-    dslShowResult(conf, typesToGenerate);
-  } catch (e) {
-    const errEl = document.getElementById('form-error');
-    errEl.textContent = 'Erreur API : ' + e.message;
-    errEl.style.display = 'block';
-    dslShowStep('form');
+  // ── Appels séquentiels — chaque résultat s'affiche dès qu'il arrive ───
+  let completedCount = 0;
+  for (const id of typesToGenerate) {
+    // Mettre le panneau en état "chargement"
+    dslSetPanelLoading(id, true);
+    const r = await callAnalyze(id);
+    if (!r.error) {
+      dslAllResults[id] = r;
+      // Premier résultat → compat
+      if (!dslResult) {
+        dslResult  = r.result;
+        dslRawText = r.raw;
+      }
+    }
+    completedCount++;
+    // Rendre le panneau immédiatement
+    dslRenderPanel(id, r);
+    // Mettre à jour le compteur dans le titre
+    const d = DOMAINS[dslDomain];
+    document.getElementById('result-title').textContent =
+        `${d.icon} ${d.label} — ${completedCount}/${typesToGenerate.length} rapports`;
   }
-}
 
-// ── Affichage du résultat avec onglets dynamiques ────────────────────────────
-function dslShowResult(conf, typesToGenerate) {
+  // Titre final
   const d = DOMAINS[dslDomain];
-
-  // Titre principal
   document.getElementById('result-title').textContent =
       `${d.icon} ${d.label} — ${Object.keys(dslAllResults).length} rapports`;
-
-  // Badge confiance
-  const color = conf>=85?'#3fb950':conf>=60?'#d4a017':'#e05050';
-  const lbl   = conf>=85?'Haute confiance':conf>=60?'Confiance modérée':'Faible confiance';
-  const confBadgeStyle = 'background:' + color + '18;border:1px solid ' + color + ';color:' + color;
-  document.getElementById('result-conf').innerHTML =
-      `<div class="conf-badge" style="${confBadgeStyle}"><span>●</span> ${conf}% — ${lbl}</div>`;
-
-  // Barre d'onglets
-  const container = document.getElementById('a3-content');
-  const availableTypes = (typesToGenerate || OUTPUT_TYPES.map(o=>o.id))
-      .filter(id => dslAllResults[id]);
-
-  const tabsHtml = availableTypes.map(id => {
-    const ot = OUTPUT_TYPES.find(o => o.id === id);
-    if (!ot) return '';
-    const isActive = id === dslActiveTab;
-    const btnStyle = isActive
-        ? ('background:' + ot.color + '18;border-color:' + ot.color + ';color:' + ot.color)
-        : '';
-    return `<button class="multi-tab${isActive ? ' active' : ''}" id="mtab-${id}"
-      style="${btnStyle}" onclick="dslSwitchTab('${id}')">
-      ${escapeHtml(ot.label)}
-    </button>`;
-  }).join('');
-
-  // Panneaux (tous générés, un seul visible)
-  const panelsHtml = availableTypes.map(id => {
-    const display = id === dslActiveTab ? '' : 'display:none';
-    return `<div class="multi-panel" id="mpanel-${id}" style="${display}"></div>`;
-  }).join('');
-
-  container.innerHTML = `
-    <div class="multi-tabs" id="multi-tabs">${tabsHtml}</div>
-    ${panelsHtml}`;
-
-  // Render chaque panneau
-  availableTypes.forEach(id => {
-    const panel = document.getElementById('mpanel-' + id);
-    if (!panel) return;
-    const { result, raw } = dslAllResults[id];
-    if (result && typeof result === 'object') {
-      panel.innerHTML = renderA3Json(result);
-    } else {
-      panel.style.whiteSpace = 'pre-wrap';
-      panel.textContent = raw || 'Pas de réponse.';
-    }
-  });
 
   // Panel chat RAG
   const msgs = document.getElementById('panel-msgs');
@@ -774,31 +708,88 @@ function dslShowResult(conf, typesToGenerate) {
   addPanelMsg('bot',
       `${Object.keys(dslAllResults).length} rapports générés ✓\n\nPosez vos questions sur l'analyse — je m'appuie sur vos documents indexés.`);
   dslUpdateRagInfo();
-  dslShowStep('result');
 }
 
-// ── Switcher d'onglets ────────────────────────────────────────────────────
-function dslSwitchTab(id) {
-  dslActiveTab = id;
-  // Reset tous les tabs
-  document.querySelectorAll('.multi-tab').forEach(btn => {
-    btn.classList.remove('active');
-    btn.style.background = '';
-    btn.style.borderColor = '';
-    btn.style.color = '';
-  });
-  document.querySelectorAll('.multi-panel').forEach(p => p.style.display = 'none');
-  // Activer le tab cliqué
-  const ot = OUTPUT_TYPES.find(o => o.id === id);
-  const btn = document.getElementById('mtab-' + id);
-  if (btn && ot) {
-    btn.classList.add('active');
-    btn.style.background = ot.color + '18';
-    btn.style.borderColor = ot.color;
-    btn.style.color = ot.color;
+// ── Initialise la structure onglets + panneaux (avant les données) ────────
+function dslInitResult(conf, typesToGenerate) {
+  const d = DOMAINS[dslDomain];
+
+  document.getElementById('result-title').textContent =
+      `${d.icon} ${d.label} — 0/${typesToGenerate.length} rapports`;
+
+  // Badge confiance
+  const color = conf>=85?'#3fb950':conf>=60?'#d4a017':'#e05050';
+  const lbl   = conf>=85?'Haute confiance':conf>=60?'Confiance modérée':'Faible confiance';
+  const confStyle = 'background:' + color + '18;border:1px solid ' + color + ';color:' + color;
+  document.getElementById('result-conf').innerHTML =
+      `<div class="conf-badge" style="${confStyle}"><span>●</span> ${conf}% — ${lbl}</div>`;
+
+  // Onglets
+  const tabsHtml = typesToGenerate.map((id, i) => {
+    const ot = OUTPUT_TYPES.find(o => o.id === id);
+    if (!ot) return '';
+    const isActive = i === 0;
+    const btnStyle = isActive
+        ? ('background:' + ot.color + '18;border-color:' + ot.color + ';color:' + ot.color)
+        : '';
+    return `<button class="multi-tab${isActive ? ' active' : ''}" id="mtab-${id}"
+      style="${btnStyle}" onclick="dslSwitchTab('${id}')">
+      ${escapeHtml(ot.label)}
+      <span class="tab-spinner" id="tspinner-${id}">⏳</span>
+    </button>`;
+  }).join('');
+
+  // Panneaux vides
+  const panelsHtml = typesToGenerate.map((id, i) =>
+      `<div class="multi-panel" id="mpanel-${id}" style="${i===0?'':'display:none'}">
+      <div class="panel-loading-msg" id="pload-${id}">
+        <div class="spin" style="width:24px;height:24px;border-width:2px"></div>
+        <span style="color:var(--txt-dim);font-size:13px">Génération en cours…</span>
+      </div>
+    </div>`
+  ).join('');
+
+  document.getElementById('a3-content').innerHTML =
+      `<div class="multi-tabs" id="multi-tabs">${tabsHtml}</div>${panelsHtml}`;
+
+  // Panel chat RAG — message d'attente
+  const msgs = document.getElementById('panel-msgs');
+  msgs.innerHTML = '';
+  addPanelMsg('bot', 'Génération des rapports en cours…\nLes onglets s\'activent au fur et à mesure.');
+  dslUpdateRagInfo();
+}
+
+// ── Affiche le spinner de chargement dans un panneau ─────────────────────
+function dslSetPanelLoading(id, isLoading) {
+  const spinner = document.getElementById('tspinner-' + id);
+  if (spinner) spinner.style.display = isLoading ? '' : 'none';
+}
+
+// ── Rend le contenu d'un panneau dès réception ───────────────────────────
+function dslRenderPanel(id, r) {
+  const panel   = document.getElementById('mpanel-' + id);
+  const pload   = document.getElementById('pload-' + id);
+  const spinner = document.getElementById('tspinner-' + id);
+  if (!panel) return;
+  if (pload) pload.remove();
+  if (spinner) spinner.style.display = 'none';
+
+  if (r.error) {
+    panel.innerHTML = `<div style="color:var(--red);padding:16px;font-size:13px">❌ ${escapeHtml(r.raw)}</div>`;
+    return;
   }
-  const panel = document.getElementById('mpanel-' + id);
-  if (panel) panel.style.display = '';
+  if (r.result && typeof r.result === 'object') {
+    panel.innerHTML = renderA3Json(r.result);
+  } else {
+    panel.style.whiteSpace = 'pre-wrap';
+    panel.textContent = r.raw || 'Pas de réponse.';
+  }
+}
+
+// ── Affichage du résultat (kept for compat with dslBack('form') → re-render)
+function dslShowResult(conf, typesToGenerate) {
+  dslInitResult(conf, typesToGenerate || OUTPUT_TYPES.map(o => o.id));
+  dslShowStep('result');
 }
 
 

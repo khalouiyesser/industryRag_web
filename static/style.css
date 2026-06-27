@@ -759,6 +759,12 @@ header {
   font-weight: 600;
 }
 
+.tab-spinner { font-size: 11px; margin-left: 4px; }
+.panel-loading-msg {
+  display: flex; align-items: center; gap: 12px;
+  padding: 40px 20px; color: var(--txt-dim); font-size: 13px;
+}
+
 @media (max-width: 640px) {
   .multi-tabs { gap: 4px; }
   .multi-tab { font-size: 11px; padding: 5px 10px; }
