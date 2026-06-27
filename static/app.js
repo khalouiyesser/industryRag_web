@@ -492,8 +492,21 @@ function dslShowStep(step) {
   });
 }
 function dslGoSelect() { buildDomainCards(); dslShowStep('select'); }
+function dslNewAnalysis() {
+  // Reset complet de l'état DSL
+  dslDomain     = null;
+  dslFormData   = {};
+  dslAllResults = {};
+  dslActiveTab  = null;
+  dslResult     = null;
+  dslRawText    = '';
+  dslPanelHistory = [];
+  // Reconstruire la grille de domaines et aller directement à la sélection
+  buildDomainCards();
+  dslShowStep('select');
+}
 function dslBack(step) {
-  if (step === 'home') { dslDomain = null; dslFormData = {}; dslOutputType = 'digital_a3'; buildHomeDomainGrid(); }
+  if (step === 'home') { dslDomain = null; dslFormData = {}; buildHomeDomainGrid(); }
   if (step === 'select') buildDomainCards();
   if (step === 'form') buildForm();
   dslShowStep(step);
