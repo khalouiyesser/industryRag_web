@@ -108,8 +108,18 @@ def _call_claude(
             )
         except (anthropic.RateLimitError, anthropic.APIStatusError) as exc:
             is_last = attempt == MAX_RETRIES
+            status  = getattr(exc, "status_code", None)
+            # Logger le body complet de l'erreur pour diagnostic
+            err_body = getattr(exc, "response", None)
+            if err_body is not None:
+                try:
+                    logger.error("Anthropic %s body: %s", status, err_body.text)
+                except Exception:
+                    logger.error("Anthropic %s error: %s", status, str(exc))
+            else:
+                logger.error("Anthropic %s error: %s", status, str(exc))
             retriable = isinstance(exc, anthropic.RateLimitError) or (
-                    getattr(exc, "status_code", None) in (429, 503, 529)
+                    status in (429, 503, 529)
             )
             if retriable and not is_last:
                 logger.warning(

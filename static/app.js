@@ -42,7 +42,7 @@ const OUTPUT_TYPES = [
     audience:'Technicien / Opérateur (sans escalade superviseur)',
     trigger:'Problème mineur connu, cause unique, premier shift',
     time:'< 15s', color:'#d4a017' },
-  { id:'exec_summary', label:'📊 Executive Summary',      shortLabel:'Exec',
+  { id:'executive_summary', label:'📊 Executive Summary',      shortLabel:'Exec',
     desc:'Vue synthèse 5 sections — traffic-light par domaine, COPQ, actions semaine',
     audience:'Superviseur / Chef de production / Directeur',
     trigger:'Revue hebdo/mensuelle de performance multi-domaines',
@@ -673,10 +673,13 @@ async function dslRunAnalysis() {
     }
   }
 
-  // ── Appels séquentiels — chaque résultat s'affiche dès qu'il arrive ───
+  // ── Appels séquentiels avec pause anti-rate-limit ────────────────────
   let completedCount = 0;
   for (const id of typesToGenerate) {
-    // Mettre le panneau en état "chargement"
+    // Pause de 3s entre chaque appel (sauf le premier) pour éviter le rate limit
+    if (completedCount > 0) {
+      await new Promise(resolve => setTimeout(resolve, 3000));
+    }
     dslSetPanelLoading(id, true);
     const r = await callAnalyze(id);
     if (!r.error) {
@@ -760,6 +763,31 @@ function dslInitResult(conf, typesToGenerate) {
 }
 
 // ── Affiche le spinner de chargement dans un panneau ─────────────────────
+function dslSwitchTab(id) {
+  dslActiveTab = id;
+  const ot = OUTPUT_TYPES.find(o => o.id === id);
+  // Reset tous les onglets
+  document.querySelectorAll('.multi-tab').forEach(btn => {
+    btn.classList.remove('active');
+    btn.style.background = '';
+    btn.style.borderColor = '';
+    btn.style.color = '';
+  });
+  // Cacher tous les panneaux
+  document.querySelectorAll('.multi-panel').forEach(p => p.style.display = 'none');
+  // Activer l'onglet cliqué
+  const btn = document.getElementById('mtab-' + id);
+  if (btn && ot) {
+    btn.classList.add('active');
+    btn.style.background = ot.color + '18';
+    btn.style.borderColor = ot.color;
+    btn.style.color = ot.color;
+  }
+  // Afficher le panneau correspondant
+  const panel = document.getElementById('mpanel-' + id);
+  if (panel) panel.style.display = '';
+}
+
 function dslSetPanelLoading(id, isLoading) {
   const spinner = document.getElementById('tspinner-' + id);
   if (spinner) spinner.style.display = isLoading ? '' : 'none';
